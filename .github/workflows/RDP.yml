@@ -4,112 +4,126 @@ on:
   workflow_dispatch:
 
 jobs:
-  high-performance-rdp:
+  secure-rdp:
     runs-on: windows-latest
-    timeout-minutes: 360 # Giới hạn thời gian tối đa (6 giờ)
-
+    timeout-minutes: 3600
+        
     steps:
-      # ----------------------------------------
-      # 1. Cấu hình cốt lõi Remote Desktop (RDP)
-      # ----------------------------------------
-      - name: Configure RDP Settings
+      # Step 1: Tối ưu hiệu suất hệ thống
+      - name: Optimize Windows Performance
         run: |
-          # Bật RDP và tắt tính năng Xác thực Cấp độ Mạng (NLA)
-          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' `
-                            -Name "fDenyTSConnections" -Value 0 -Force
-          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' `
-                            -Name "UserAuthentication" -Value 0 -Force
-          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' `
-                            -Name "SecurityLayer" -Value 0 -Force
-          
-          # Cài đặt firewall để mở port RDP
-          netsh advfirewall firewall delete rule name="RDP-Tailscale" || echo "No existing rule to delete."
+          # Set high-performance power plan
+          powercfg -change -monitor-timeout-ac 0
+          powercfg -change -disk-timeout-ac 0
+          powercfg -change -standby-timeout-ac 0
+          powercfg -setactive scheme_min
+
+          # Adjust visual effects for performance
+          reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects" /v VisualFXSetting /t REG_DWORD /d 2 /f
+
+          # Enable all CPU cores
+          bcdedit /set numproc 0
+
+          # Optimize Large System Cache
+          reg add "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management" /v LargeSystemCache /t REG_DWORD /d 1 /f
+
+      # Step 2: Cấu hình RDP để tối ưu hóa (60 FPS, độ trễ thấp)
+      - name: Configure RDP for High Performance
+        run: |
+          # Enable RDP
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0 -Force
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 0 -Force
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "SecurityLayer" -Value 0 -Force
+
+          # Configure RDP to use high FPS and color depth
+          New-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name 'MaxFps' -Value 60 -PropertyType DWORD -Force
+          reg add "HKLM\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp" /v MinEncryptionLevel /t REG_DWORD /d 2 /f
+
+          # Enable GPU acceleration
+          reg add "HKLM\Software\Policies\Microsoft\Windows NT\Terminal Services" /v EnableHardwareMode /t REG_DWORD /d 1 /f
+
+          # Add Firewall rule for RDP
           netsh advfirewall firewall add rule name="RDP-Tailscale" dir=in action=allow protocol=TCP localport=3389
-          
-          # Khởi động lại dịch vụ RDP
+
+          # Restart Remote Desktop Services
           Restart-Service -Name TermService -Force
 
-      # ----------------------------------------
-      # 2. Tạo người dùng RDP với mật khẩu bảo mật
-      # ----------------------------------------
+      # Step 3: Tạo tài khoản RDP tạm thời
       - name: Create Secure RDP User
         run: |
-          $password = (New-Object System.Random).Next(10000000,99999999) | ForEach-Object {$_ -join ((48..57) + (65..90) + (97..122) | Get-Random -Count 12 | ForEach-Object {[char]$_})}
+          Add-Type -AssemblyName System.Security
+          $charSet = @{
+            Upper = [char[]](65..90)
+            Lower = [char[]](97..122)
+            Number = [char[]](48..57)
+            Special = ([char[]](33..47) + [char[]](58..64) + [char[]](91..96) + [char[]](123..126))
+          }
+          $rawPassword = @()
+          $rawPassword += $charSet.Upper | Get-Random -Count 4
+          $rawPassword += $charSet.Lower | Get-Random -Count 4
+          $rawPassword += $charSet.Number | Get-Random -Count 4
+          $rawPassword += $charSet.Special | Get-Random -Count 4
+          $password = -join ($rawPassword | Sort-Object { Get-Random })
           $securePass = ConvertTo-SecureString $password -AsPlainText -Force
-
           New-LocalUser -Name "RDP" -Password $securePass -AccountNeverExpires
           Add-LocalGroupMember -Group "Administrators" -Member "RDP"
           Add-LocalGroupMember -Group "Remote Desktop Users" -Member "RDP"
+          echo "RDP_CREDS=User: RDP | Password: $password" >> $env:GITHUB_ENV
 
-          Write-Output "RDP_CREDS=User: RDP | Password: $password" >> $env:GITHUB_ENV
-
-      # ------------------------------------------------
-      # 3. Cài đặt và cấu hình Tailscale
-      # ------------------------------------------------
+      # Step 4: Cài đặt Tailscale để truy cập từ xa
       - name: Install Tailscale
         run: |
-          $tsInstaller = "$env:TEMP\tailscale.msi"
-          Invoke-WebRequest -Uri "https://pkgs.tailscale.com/stable/tailscale-setup-latest.msi" -OutFile $tsInstaller
-          Start-Process msiexec.exe -ArgumentList "/i", "`"$tsInstaller`"", "/quiet", "/norestart" -Wait
-          Remove-Item $tsInstaller -Force
+          $tsUrl = "https://pkgs.tailscale.com/stable/tailscale-setup-1.82.0-amd64.msi"
+          $installerPath = "$env:TEMP\tailscale.msi"
+          Invoke-WebRequest -Uri $tsUrl -OutFile $installerPath
+          Start-Process msiexec.exe -ArgumentList "/i", ""$installerPath"", "/quiet", "/norestart" -Wait
+          Remove-Item $installerPath -Force
 
-      - name: Start and Authenticate Tailscale
+      # Step 5: Thiết lập kết nối Tailscale
+      - name: Setup Tailscale
         run: |
-          & "$env:ProgramFiles\Tailscale\tailscale.exe" up --authkey=${{ secrets.TAILSCALE_AUTH_KEY }} --hostname="gh-runner-${{ github.run_id }}"
+          & "$env:ProgramFiles\Tailscale\tailscale.exe" up --authkey=${{ secrets.TAILSCALE_AUTH_KEY }} --hostname=gh-runner-$env:GITHUB_RUN_ID
+          $tsIP = $null
           $retries = 0
-          $ips = $null
-          while (-not $ips -and $retries -lt 6) {
-              $ips = (& "$env:ProgramFiles\Tailscale\tailscale.exe" ip -4)
-              Start-Sleep -Seconds 10
-              $retries++
+          while (-not $tsIP -and $retries -lt 10) {
+            $tsIP = & "$env:ProgramFiles\Tailscale\tailscale.exe" ip -4
+            Start-Sleep -Seconds 5
+            $retries++
           }
-          if (-not $ips) {
-              Write-Error "Failed to retrieve Tailscale IP."
-              exit 1
+          if (-not $tsIP) {
+            Write-Error "No Tailscale IP assigned. Exiting."
+            exit 1
           }
-          Write-Output "TAILSCALE_IP=$ips" >> $env:GITHUB_ENV
+          echo "TAILSCALE_IP=$tsIP" >> $env:GITHUB_ENV
 
-      # --------------------------------------------
-      # 4. Đảm bảo tốc độ mượt mà 60 FPS
-      # --------------------------------------------
-      - name: Enable Maximum GPU/CPU Performance
-        run: |
-          # Windows tự động quản lý GPU và hiệu suất tối đa, không cần cấu hình riêng nếu sử dụng phiên bản Windows-latest của GitHub.
-          Write-Host "System operating at maximum default settings for GitHub runners."
-
-      # --------------------------------------------
-      # 5. Kiểm tra khả năng kết nói tới RDP
-      # --------------------------------------------
-      - name: Test RDP Connection
+      # Step 6: Kiểm tra kết nối RDP
+      - name: Verify RDP
         run: |
           $testResult = Test-NetConnection -ComputerName $env:TAILSCALE_IP -Port 3389
           if (-not $testResult.TcpTestSucceeded) {
-              Write-Error "Failed to connect to remote desktop port."
-              exit 1
+            Write-Error "Could not connect to RDP (Port 3389). Exiting."
+            exit 1
           }
-          
-      # --------------------------------------------
-      # 6. Giữ kết nối luôn hoạt động
-      # --------------------------------------------
-      - name: Keep Connection Alive
+          Write-Host "RDP connection verified successfully."
+
+      # Step 7: Console để giữ kết nối
+      - name: Maintain Connection
         run: |
-          Write-Host "`n========== RDP INFO =========="
+          Write-Host "=== RDP ACCESS ==="
           Write-Host "Address: $env:TAILSCALE_IP"
           Write-Host "Username: RDP"
-          Write-Host "Password: $($env:RDP_CREDS)"
-          Write-Host "==============================="
-
+          Write-Host "Password: $(echo $env:RDP_CREDS)"
+          Write-Host "=================="
           while ($true) {
-              Write-Host "[$(Get-Date)] RDP Active... Terminate workflow to stop manually."
-              Start-Sleep -Seconds 300
+            Write-Host "[$(Get-Date)] RDP Active"
+            Start-Sleep -Seconds 300
           }
 
-      # -------------------------------------------------
-      # 7. Cleanup - Xoá dữ liệu sau khi hoàn thành
-      # -------------------------------------------------
-      - name: Cleanup Temporary Resources
-        if: always() # Luôn chạy cleanup dù workflow thành công hoặc thất bại
+      # Step 8: Dọn dẹp sau khi workflow kết thúc
+      - name: Cleanup
+        if: always()
         run: |
-          net user RDP /delete
-          rm -Recurse -Force "$env:USERPROFILE\Desktop\*" 2>$null
-          Write-Host "Temporary files removed successfully."
+          Remove-LocalUser -Name "RDP"
+          netsh advfirewall firewall delete rule name="RDP-Tailscale"
+          Stop-Service -Name TermService -Force
+          Write-Host "Cleanup completed successfully."
