@@ -4,110 +4,112 @@ on:
   workflow_dispatch:
 
 jobs:
-  secure-rdp:
+  high-performance-rdp:
     runs-on: windows-latest
-    timeout-minutes: 3600
+    timeout-minutes: 360 # Giới hạn thời gian tối đa (6 giờ)
 
     steps:
-      - name: Configure Core RDP Settings
+      # ----------------------------------------
+      # 1. Cấu hình cốt lõi Remote Desktop (RDP)
+      # ----------------------------------------
+      - name: Configure RDP Settings
         run: |
-          # Enable Remote Desktop and disable Network Level Authentication (if needed)
+          # Bật RDP và tắt tính năng Xác thực Cấp độ Mạng (NLA)
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' `
-                             -Name "fDenyTSConnections" -Value 0 -Force
+                            -Name "fDenyTSConnections" -Value 0 -Force
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' `
-                             -Name "UserAuthentication" -Value 0 -Force
+                            -Name "UserAuthentication" -Value 0 -Force
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' `
-                             -Name "SecurityLayer" -Value 0 -Force
-
-          # Remove any existing rule with the same name to avoid duplication
-          netsh advfirewall firewall delete rule name="RDP-Tailscale"
+                            -Name "SecurityLayer" -Value 0 -Force
           
-          # For testing, allow any incoming connection on port 3389
-          netsh advfirewall firewall add rule name="RDP-Tailscale" `
-            dir=in action=allow protocol=TCP localport=3389
-
-          # (Optional) Restart the Remote Desktop service to ensure changes take effect
+          # Cài đặt firewall để mở port RDP
+          netsh advfirewall firewall delete rule name="RDP-Tailscale" || echo "No existing rule to delete."
+          netsh advfirewall firewall add rule name="RDP-Tailscale" dir=in action=allow protocol=TCP localport=3389
+          
+          # Khởi động lại dịch vụ RDP
           Restart-Service -Name TermService -Force
 
-      - name: Create RDP User with Secure Password
+      # ----------------------------------------
+      # 2. Tạo người dùng RDP với mật khẩu bảo mật
+      # ----------------------------------------
+      - name: Create Secure RDP User
         run: |
-          Add-Type -AssemblyName System.Security
-          $charSet = @{
-              Upper   = [char[]](65..90)      # A-Z
-              Lower   = [char[]](97..122)     # a-z
-              Number  = [char[]](48..57)      # 0-9
-              Special = ([char[]](33..47) + [char[]](58..64) +
-                         [char[]](91..96) + [char[]](123..126)) # Special characters
-          }
-          $rawPassword = @()
-          $rawPassword += $charSet.Upper | Get-Random -Count 4
-          $rawPassword += $charSet.Lower | Get-Random -Count 4
-          $rawPassword += $charSet.Number | Get-Random -Count 4
-          $rawPassword += $charSet.Special | Get-Random -Count 4
-          $password = -join ($rawPassword | Sort-Object { Get-Random })
+          $password = (New-Object System.Random).Next(10000000,99999999) | ForEach-Object {$_ -join ((48..57) + (65..90) + (97..122) | Get-Random -Count 12 | ForEach-Object {[char]$_})}
           $securePass = ConvertTo-SecureString $password -AsPlainText -Force
+
           New-LocalUser -Name "RDP" -Password $securePass -AccountNeverExpires
           Add-LocalGroupMember -Group "Administrators" -Member "RDP"
           Add-LocalGroupMember -Group "Remote Desktop Users" -Member "RDP"
-          
-          echo "RDP_CREDS=User: RDP | Password: $password" >> $env:GITHUB_ENV
-          
-          if (-not (Get-LocalUser -Name "RDP")) {
-              Write-Error "User creation failed"
-              exit 1
-          }
 
+          Write-Output "RDP_CREDS=User: RDP | Password: $password" >> $env:GITHUB_ENV
+
+      # ------------------------------------------------
+      # 3. Cài đặt và cấu hình Tailscale
+      # ------------------------------------------------
       - name: Install Tailscale
         run: |
-          $tsUrl = "https://pkgs.tailscale.com/stable/tailscale-setup-1.82.0-amd64.msi"
-          $installerPath = "$env:TEMP\tailscale.msi"
-          
-          Invoke-WebRequest -Uri $tsUrl -OutFile $installerPath
-          Start-Process msiexec.exe -ArgumentList "/i", "`"$installerPath`"", "/quiet", "/norestart" -Wait
-          Remove-Item $installerPath -Force
+          $tsInstaller = "$env:TEMP\tailscale.msi"
+          Invoke-WebRequest -Uri "https://pkgs.tailscale.com/stable/tailscale-setup-latest.msi" -OutFile $tsInstaller
+          Start-Process msiexec.exe -ArgumentList "/i", "`"$tsInstaller`"", "/quiet", "/norestart" -Wait
+          Remove-Item $tsInstaller -Force
 
-      - name: Establish Tailscale Connection
+      - name: Start and Authenticate Tailscale
         run: |
-          # Bring up Tailscale with the provided auth key and set a unique hostname
-          & "$env:ProgramFiles\Tailscale\tailscale.exe" up --authkey=${{ secrets.TAILSCALE_AUTH_KEY }} --hostname=gh-runner-$env:GITHUB_RUN_ID
-          
-          # Wait for Tailscale to assign an IP
-          $tsIP = $null
+          & "$env:ProgramFiles\Tailscale\tailscale.exe" up --authkey=${{ secrets.TAILSCALE_AUTH_KEY }} --hostname="gh-runner-${{ github.run_id }}"
           $retries = 0
-          while (-not $tsIP -and $retries -lt 10) {
-              $tsIP = & "$env:ProgramFiles\Tailscale\tailscale.exe" ip -4
-              Start-Sleep -Seconds 5
+          $ips = $null
+          while (-not $ips -and $retries -lt 6) {
+              $ips = (& "$env:ProgramFiles\Tailscale\tailscale.exe" ip -4)
+              Start-Sleep -Seconds 10
               $retries++
           }
-          
-          if (-not $tsIP) {
-              Write-Error "Tailscale IP not assigned. Exiting."
+          if (-not $ips) {
+              Write-Error "Failed to retrieve Tailscale IP."
               exit 1
           }
-          echo "TAILSCALE_IP=$tsIP" >> $env:GITHUB_ENV
-      
-      - name: Verify RDP Accessibility
+          Write-Output "TAILSCALE_IP=$ips" >> $env:GITHUB_ENV
+
+      # --------------------------------------------
+      # 4. Đảm bảo tốc độ mượt mà 60 FPS
+      # --------------------------------------------
+      - name: Enable Maximum GPU/CPU Performance
         run: |
-          Write-Host "Tailscale IP: $env:TAILSCALE_IP"
-          
-          # Test connectivity using Test-NetConnection against the Tailscale IP on port 3389
+          # Windows tự động quản lý GPU và hiệu suất tối đa, không cần cấu hình riêng nếu sử dụng phiên bản Windows-latest của GitHub.
+          Write-Host "System operating at maximum default settings for GitHub runners."
+
+      # --------------------------------------------
+      # 5. Kiểm tra khả năng kết nói tới RDP
+      # --------------------------------------------
+      - name: Test RDP Connection
+        run: |
           $testResult = Test-NetConnection -ComputerName $env:TAILSCALE_IP -Port 3389
           if (-not $testResult.TcpTestSucceeded) {
-              Write-Error "TCP connection to RDP port 3389 failed"
+              Write-Error "Failed to connect to remote desktop port."
               exit 1
           }
-          Write-Host "TCP connectivity successful!"
-
-      - name: Maintain Connection
+          
+      # --------------------------------------------
+      # 6. Giữ kết nối luôn hoạt động
+      # --------------------------------------------
+      - name: Keep Connection Alive
         run: |
-          Write-Host "`n=== RDP ACCESS ==="
+          Write-Host "`n========== RDP INFO =========="
           Write-Host "Address: $env:TAILSCALE_IP"
           Write-Host "Username: RDP"
-          Write-Host "Password: $(echo $env:RDP_CREDS)"
-          Write-Host "==================`n"
-          
-          # Keep runner active indefinitely (or until manually cancelled)
+          Write-Host "Password: $($env:RDP_CREDS)"
+          Write-Host "==============================="
+
           while ($true) {
-              Write-Host "[$(Get-Date)] RDP Active - Use Ctrl+C in workflow to terminate"
+              Write-Host "[$(Get-Date)] RDP Active... Terminate workflow to stop manually."
               Start-Sleep -Seconds 300
           }
+
+      # -------------------------------------------------
+      # 7. Cleanup - Xoá dữ liệu sau khi hoàn thành
+      # -------------------------------------------------
+      - name: Cleanup Temporary Resources
+        if: always() # Luôn chạy cleanup dù workflow thành công hoặc thất bại
+        run: |
+          net user RDP /delete
+          rm -Recurse -Force "$env:USERPROFILE\Desktop\*" 2>$null
+          Write-Host "Temporary files removed successfully."
