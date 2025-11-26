@@ -11,6 +11,7 @@ jobs:
     steps:
       # Step 1: Tối ưu hiệu suất hệ thống
       - name: Optimize Windows Performance
+        shell: pwsh
         run: |
           # Set high-performance power plan
           powercfg -change -monitor-timeout-ac 0
@@ -29,6 +30,7 @@ jobs:
 
       # Step 2: Cấu hình RDP để tối ưu hóa (60 FPS, độ trễ thấp)
       - name: Configure RDP for High Performance
+        shell: pwsh
         run: |
           # Enable RDP
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0 -Force
@@ -36,7 +38,7 @@ jobs:
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "SecurityLayer" -Value 0 -Force
 
           # Configure RDP to use high FPS and color depth
-          New-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name 'MaxFps' -Value 60 -PropertyType DWORD -Force
+          reg add "HKLM\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp" /v MaxFps /t REG_DWORD /d 60 /f
           reg add "HKLM\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp" /v MinEncryptionLevel /t REG_DWORD /d 2 /f
 
           # Enable GPU acceleration
@@ -50,6 +52,7 @@ jobs:
 
       # Step 3: Tạo tài khoản RDP tạm thời
       - name: Create Secure RDP User
+        shell: pwsh
         run: |
           Add-Type -AssemblyName System.Security
           $charSet = @{
@@ -72,6 +75,7 @@ jobs:
 
       # Step 4: Cài đặt Tailscale để truy cập từ xa
       - name: Install Tailscale
+        shell: pwsh
         run: |
           $tsUrl = "https://pkgs.tailscale.com/stable/tailscale-setup-1.82.0-amd64.msi"
           $installerPath = "$env:TEMP\tailscale.msi"
@@ -81,6 +85,7 @@ jobs:
 
       # Step 5: Thiết lập kết nối Tailscale
       - name: Setup Tailscale
+        shell: pwsh
         run: |
           & "$env:ProgramFiles\Tailscale\tailscale.exe" up --authkey=${{ secrets.TAILSCALE_AUTH_KEY }} --hostname=gh-runner-$env:GITHUB_RUN_ID
           $tsIP = $null
@@ -98,6 +103,7 @@ jobs:
 
       # Step 6: Kiểm tra kết nối RDP
       - name: Verify RDP
+        shell: pwsh
         run: |
           $testResult = Test-NetConnection -ComputerName $env:TAILSCALE_IP -Port 3389
           if (-not $testResult.TcpTestSucceeded) {
@@ -108,6 +114,7 @@ jobs:
 
       # Step 7: Console để giữ kết nối
       - name: Maintain Connection
+        shell: pwsh
         run: |
           Write-Host "=== RDP ACCESS ==="
           Write-Host "Address: $env:TAILSCALE_IP"
@@ -122,6 +129,7 @@ jobs:
       # Step 8: Dọn dẹp sau khi workflow kết thúc
       - name: Cleanup
         if: always()
+        shell: pwsh
         run: |
           Remove-LocalUser -Name "RDP"
           netsh advfirewall firewall delete rule name="RDP-Tailscale"
