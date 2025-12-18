@@ -5,7 +5,7 @@ on:
 
 jobs:
   secure-rdp:
-    runs-on: windows-latest  # Siêu mạnh cho dev + emulator mượt
+    runs-on: windows-latest-16-core
     timeout-minutes: 360
 
     steps:
@@ -15,8 +15,25 @@ jobs:
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 0 -Force
           Restart-Service -Name TermService -Force
           
+          # Enable Remote Audio
+          reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services" /v fDisableAudioCapture /t REG_DWORD /d 0 /f
+          reg add "HKLM\SYSTEM\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp" /v fDisableAudioCapture /t REG_DWORD /d 0 /f
           
+          # Prevent idle/sleep
+          Set-ItemProperty -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services' -Name "MaxIdleTime" -Value 0 -Type DWord -Force
+          Set-ItemProperty -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services' -Name "MaxDisconnectionTime" -Value 0 -Type DWord -Force
+          powercfg -change -monitor-timeout-ac 0
+          powercfg -change -standby-timeout-ac 0
+          powercfg -change -hibernate-timeout-ac 0
           
+          # Keep awake
+          $code = @'
+          [DllImport("kernel32.dll")]
+          public static extern uint SetThreadExecutionState(uint esFlags);
+          '@
+          $type = Add-Type -MemberDefinition $code -Name "Win32" -Namespace "Native" -PassThru
+          $type::SetThreadExecutionState(0x80000003)
+
       - name: Create Strong RDP User
         run: |
           $passwordChars = @()
@@ -31,7 +48,7 @@ jobs:
           
           echo "RDP_PASSWORD=$password" >> $env:GITHUB_ENV
 
-      - name: Create
+      - name: Create Extra Drive X: (300GB on D:)
         run: |
           $vhdxPath = "D:\extra_drive.vhdx"
           New-VHD -Path $vhdxPath -SizeBytes 300GB -Dynamic | Mount-VHD -PassThru | Out-Null
@@ -44,7 +61,7 @@ jobs:
           $driveLetter = (Get-Partition -DiskNumber (Get-Disk | Where-Object OperationalStatus -eq 'Online' | Select-Object -Last 1).Number | Select-Object -Last 1).DriveLetter
           echo "EXTRA_DRIVE=${driveLetter}:" >> $env:GITHUB_ENV
 
-      - name: Install Latest Android Studio
+      - name: Install Latest Android Studio to D: Drive
         run: |
           $installerUrl = "https://redirector.gvt1.com/edgedl/android/studio/install/2025.2.2.7/android-studio-2025.2.2.7-windows.exe"
           $installerPath = "$env:TEMP\android-studio.exe"
@@ -53,10 +70,13 @@ jobs:
           Start-Process $installerPath -ArgumentList "/S", "/D=D:\Android\AndroidStudio" -Wait
           Remove-Item $installerPath -Force
 
-      - name: Accept Licenses & Install SDK Packages
+      - name: Install SDK Packages & Auto Accept Licenses
         run: |
-          & "D:\Android\AndroidStudio\android\sdk\cmdline-tools\latest\bin\sdkmanager.bat" --licenses --sdk_root="D:\Android\sdk" < "$null"
-          & "D:\Android\AndroidStudio\android\sdk\cmdline-tools\latest\bin\sdkmanager.bat" "platform-tools" "platforms;android-35" "system-images;android-35;google_apis;x86_64" "emulator" --sdk_root="D:\Android\sdk"
+          $sdkManager = "D:\Android\AndroidStudio\android\sdk\cmdline-tools\latest\bin\sdkmanager.bat"
+          $sdkRoot = "D:\Android\sdk"
+          
+          # Auto accept licenses bằng pipe 'yes' và install packages (licenses sẽ được accept tự động)
+          yes | & $sdkManager "platform-tools" "platforms;android-35" "system-images;android-35;google_apis;x86_64" "emulator" --sdk_root=$sdkRoot
 
       - name: Install Latest Tailscale
         run: |
@@ -93,7 +113,6 @@ jobs:
           $sdkRoot = "D:\Android\sdk"
           & "$sdkRoot\cmdline-tools\latest\bin\avdmanager.bat" create avd -n "Pixel_8_API_35" -k "system-images;android-35;google_apis;x86_64" -d "pixel_8"
           
-          # Config mạnh + sound tốt
           $configPath = "$env:USERPROFILE\.android\avd\Pixel_8_API_35.avd\config.ini"
           @"
           hw.ramSize=8192MB
@@ -104,7 +123,7 @@ jobs:
           hw.audioOutput=yes
           "@ | Add-Content $configPath
           
-          # Launch với GUI + BẬT ÂM THANH (không -no-audio)
+          # Launch với GUI + ÂM THANH đầy đủ
           Start-Process "$sdkRoot\emulator\emulator.exe" -ArgumentList "-avd", "Pixel_8_API_35", "-gpu", "auto", "-no-boot-anim" -WindowStyle Normal
 
       - name: Run Keep-Alive
@@ -121,21 +140,18 @@ jobs:
       - name: Display Info & Keep Alive
         run: |
           Write-Host "`n=================================="
-          Write-Host "   RDP ANDROID DEV WITH SOUND READY!"
+          Write-Host "   RDP ANDROID DEV WITH SOUND - FIXED!"
           Write-Host "=================================="
           Write-Host "Runner: 16 vCPU - IO nhanh"
           Write-Host "Extra Drive: $env:EXTRA_DRIVE (~300 GB)"
-          Write-Host "Emulator: Pixel 8 API 35 - Có ÂM THANH đầy đủ!"
+          Write-Host "Emulator: Pixel 8 API 35 - Có ÂM THANH!"
           Write-Host "Connect RDP: $env:TAILSCALE_IP"
           Write-Host "Username: RDP"
           Write-Host "Password: $env:RDP_PASSWORD"
-          Write-Host "Tips cho SOUND:"
-          Write-Host "- Trong Microsoft Remote Desktop client: Local Resources > Remote audio > Play on this computer"
-          Write-Host "- RDP vào → mở YouTube/TikTok trong emulator → nghe sound rõ ràng trên máy bạn!"
-          Write-Host "- Nếu sound nhỏ: Tăng volume trong Android (swipe down > volume slider)"
+          Write-Host "Tips SOUND: RDP client > Local Resources > Remote audio > Play on this computer"
           Write-Host "==================================`n"
           
           while ($true) {
-              Write-Host "[$(Get-Date)] RDP + Emulator WITH SOUND active"
+              Write-Host "[$(Get-Date)] All systems active - No more license errors!"
               Start-Sleep -Seconds 600
           }
