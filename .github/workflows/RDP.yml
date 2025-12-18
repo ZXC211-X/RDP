@@ -48,7 +48,7 @@ jobs:
           
           echo "RDP_PASSWORD=$password" >> $env:GITHUB_ENV
 
-      - name: Create Extra Drive X: (300GB on D:)
+      - name: Create
         run: |
           $vhdxPath = "D:\extra_drive.vhdx"
           New-VHD -Path $vhdxPath -SizeBytes 300GB -Dynamic | Mount-VHD -PassThru | Out-Null
