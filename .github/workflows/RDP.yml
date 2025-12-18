@@ -1,565 +1,158 @@
-name: RDP 
+name: RDP
 
 on:
   workflow_dispatch:
-    inputs:
-      duration_minutes:
-        description: 'Session duration (minutes)'
-        required: false
-        default: '480'
-      enable_nla:
-        description: 'Enable Network Level Authentication'
-        required: false
-        default: 'true'
-      graphics_quality:
-        description: 'Graphics quality level'
-        required: false
-        default: 'high'
-        type: choice
-        options:
-          - low
-          - medium
-          - high
-          - maximum
 
 jobs:
   secure-rdp:
-    runs-on: windows-latest
-    timeout-minutes: ${{ inputs.duration_minutes || 480 }}
-    concurrency:
-      group: rdp-session
-      cancel-in-progress: false
+    runs-on: windows-latest-16-core  # Siêu mạnh cho dev + emulator mượt
+    timeout-minutes: 360
 
     steps:
-    - name: Optimize System Performance
-      shell: powershell
-      run: |
-        # Disable unnecessary services for better performance
-        $servicesToDisable = @(
-          "WinSearch",           # Windows Search
-          "DiagTrack",           # Diagnostic Tracking
-          "dmwappushservice",    # Device Management
-          "XblAuthManager",      # Xbox Live Auth Manager
-          "XblGameSave",         # Xbox Live Game Save
-          "gpUpdate"             # Group Policy Update
-        )
-        
-        foreach ($service in $servicesToDisable) {
-          try {
-            Stop-Service -Name $service -Force -ErrorAction SilentlyContinue
-            Set-Service -Name $service -StartupType Disabled -ErrorAction SilentlyContinue
-            Write-Host "Disabled: $service"
-          } catch {}
-        }
-        
-        # Power settings - set to High Performance
-        powercfg /setactive 8c5e7fda-e8bf-45a6-a6cc-4b495be3835c
-        powercfg /change monitor-timeout-ac 0
-        powercfg /change disk-timeout-ac 0
-        
-        Write-Host "System performance optimized"
-
-    - name: Configure RDP Graphics & Performance
-      shell: powershell
-      run: |
-        $regPath = 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp'
-        
-        # Enable Remote Desktop
-        Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' `
-          -Name "fDenyTSConnections" -Value 0 -Force
-        
-        # NLA Configuration
-        $nlaValue = "${{ inputs.enable_nla }}" -eq 'true' ? 1 : 0
-        Set-ItemProperty -Path $regPath -Name "UserAuthentication" -Value $nlaValue -Force
-        
-        # Security layer - TLS 1.2+
-        Set-ItemProperty -Path $regPath -Name "SecurityLayer" -Value 2 -Force
-        
-        # === 60FPS OPTIMIZATION SETTINGS ===
-        
-        # 1. Enable Modern RDP Codec (H.264/AVC)
-        Set-ItemProperty -Path $regPath -Name "fUseH264CodecForNetwork" -Value 1 -Force
-        
-        # 2. Set maximum frame rate to 60fps
-        Set-ItemProperty -Path $regPath -Name "MaxFrameRate" -Value 60 -Force
-        
-        # 3. Enable H.264/AVC444 for high quality
-        Set-ItemProperty -Path $regPath -Name "H264RateControlMode" -Value 1 -Force
-        
-        # 4. Graphics optimization
-        Set-ItemProperty -Path $regPath -Name "ColorDepth" -Value 4 -Force  # 32-bit color
-        Set-ItemProperty -Path $regPath -Name "bitmapCachePersistedBitmapEnabled" -Value 1 -Force
-        
-        # 5. Enable bandwidth optimization
-        Set-ItemProperty -Path $regPath -Name "NetworkAutoDetect" -Value 1 -Force
-        Set-ItemProperty -Path $regPath -Name "BandwidthAutoDetect" -Value 1 -Force
-        
-        # 6. Increase buffer size for smooth playback
-        Set-ItemProperty -Path $regPath -Name "BufferSize" -Value 134217728 -Force  # 128MB
-        
-        # 7. Audio optimization
-        Set-ItemProperty -Path $regPath -Name "AudioMode" -Value 0 -Force  # Drive redirection
-        Set-ItemProperty -Path $regPath -Name "fAudioCaptureRedir" -Value 1 -Force
-        
-        # 8. Disable unnecessary device redirections
-        Set-ItemProperty -Path $regPath -Name "fDisablePrinters" -Value 1 -Force
-        Set-ItemProperty -Path $regPath -Name "fDisableClip" -Value 0 -Force  # Keep clipboard
-        
-        # 9. Enable VAIL (Virtual Acceleration Independent Layer)
-        $gfxPath = 'HKLM:\System\CurrentControlSet\Control\Terminal Server\ClusterSettings'
-        if (-not (Test-Path $gfxPath)) { New-Item -Path $gfxPath -Force | Out-Null }
-        Set-ItemProperty -Path $gfxPath -Name "SessionDirectoryClusterName" -Value "none" -Force
-        
-        # 10. GPU acceleration settings
-        $gpuPath = 'HKLM:\Software\Policies\Microsoft\Windows NT\Terminal Services'
-        if (-not (Test-Path $gpuPath)) { New-Item -Path $gpuPath -Force | Out-Null }
-        Set-ItemProperty -Path $gpuPath -Name "DisableFullWindowDrag" -Value 0 -Force
-        Set-ItemProperty -Path $gpuPath -Name "DisableMenuAnimations" -Value 0 -Force
-        
-        # 11. Enable RemoteFX if available (older but sometimes better)
-        try {
-          Set-ItemProperty -Path $regPath -Name "fEnableRemoteFXAdvancedGraphics" -Value 1 -Force
-        } catch {}
-        
-        # 12.  Quantum codec optimization (Windows 11+)
-        try {
-          Set-ItemProperty -Path $regPath -Name "AvcCodecSupported" -Value 1 -Force
-        } catch {}
-        
-        Write-Host "RDP Graphics optimized for 60FPS"
-
-    - name: Configure Network Settings for Low Latency
-      shell: powershell
-      run: |
-        # Disable Nagle's Algorithm for lower latency
-        New-ItemProperty -Path "HKLM:\Software\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile" `
-          -Name "NetworkThrottlingIndex" -Value 10 -PropertyType DWord -Force -ErrorAction SilentlyContinue
-        
-        # Enable QoS for RDP traffic
-        New-NetQosPolicy -Name "RDP-HighPriority" `
-          -IPProtocol TCP `
-          -DSCPAction 46 `
-          -ErrorAction SilentlyContinue
-        
-        # TCP window scaling for high bandwidth
-        netsh int tcp set global autotuninglevel=normal
-        
-        # Enable ECN (Explicit Congestion Notification)
-        netsh int tcp set global ecncapability=enabled
-        
-        Write-Host "Network optimized for low latency"
-
-    - name: Configure Firewall for RDP
-      shell: powershell
-      run: |
-        # Remove existing rule
-        netsh advfirewall firewall delete rule name="RDP-Tailscale" 2>$null
-        
-        # Add optimized firewall rule
-        netsh advfirewall firewall add rule `
-          name="RDP-Tailscale" `
-          dir=in `
-          action=allow `
-          protocol=TCP `
-          localport=3389 `
-          profile=public `
-          enable=yes
-        
-        # Enable Fast Startup
-        Restart-Service -Name TermService -Force
-        Write-Host "Firewall configured"
-
-    - name: Install Video Codec Updates
-      shell: powershell
-      run: |
-        try {
-          # Install HEVC Video Extensions if available (better compression)
-          # This is optional and may require manual intervention
-          Write-Host "Video codec environment prepared"
-        } catch {
-          Write-Host "Video codec installation skipped"
-        }
-
-    - name: Create RDP User
-      shell: powershell
-      run: |
-        # Generate secure password
-        $password = -join ((48..57) + (65..90) + (97..122) | Get-Random -Count 24 | % {[char]$_})
-        
-        # Remove existing user
-        if (Get-LocalUser -Name "RDP" -ErrorAction SilentlyContinue) {
-          Remove-LocalUser -Name "RDP" -Force
-        }
-        
-        # Create new user
-        $securePass = ConvertTo-SecureString $password -AsPlainText -Force
-        New-LocalUser -Name "RDP" -Password $securePass -PasswordNeverExpires
-        
-        # Add to groups
-        Add-LocalGroupMember -Group "Administrators" -Member "RDP" -ErrorAction SilentlyContinue
-        Add-LocalGroupMember -Group "Remote Desktop Users" -Member "RDP" -ErrorAction SilentlyContinue
-        
-        # Mask password
-        Write-Output "::add-mask::$password"
-        echo "RDP_PASSWORD=$password" >> $env:GITHUB_ENV
-        
-        Write-Host "RDP user created"
-
-    - name: Install Tailscale
-      shell: powershell
-      run: |
-        $tsUrl = "https://pkgs.tailscale.com/stable/tailscale-setup-amd64.msi"
-        $installerPath = "$env:TEMP\tailscale-installer.msi"
-        
-        try {
-          Write-Host "Downloading Tailscale..."
-          Invoke-WebRequest -Uri $tsUrl -OutFile $installerPath -TimeoutSec 30
+      - name: Configure RDP & Enable Remote Audio + Optimizations
+        run: |
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0 -Force
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 0 -Force
+          Restart-Service -Name TermService -Force
           
-          Write-Host "Installing Tailscale..."
-          $process = Start-Process msiexec. exe `
-            -ArgumentList "/i", "`"$installerPath`"", "/quiet", "/norestart" `
-            -Wait -PassThru
+          # Enable Remote Audio (truyền sound từ server về client RDP)
+          reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services" /v fDisableAudioCapture /t REG_DWORD /d 0 /f
+          reg add "HKLM\SYSTEM\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp" /v fDisableAudioCapture /t REG_DWORD /d 0 /f
           
-          if ($process.ExitCode -ne 0) {
-            throw "Tailscale installation failed with exit code: $($process.ExitCode)"
+          # Prevent idle/sleep
+          Set-ItemProperty -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services' -Name "MaxIdleTime" -Value 0 -Type DWord -Force
+          Set-ItemProperty -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services' -Name "MaxDisconnectionTime" -Value 0 -Type DWord -Force
+          powercfg -change -monitor-timeout-ac 0
+          powercfg -change -standby-timeout-ac 0
+          powercfg -change -hibernate-timeout-ac 0
+          
+          # Keep awake
+          $code = @'
+          [DllImport("kernel32.dll")]
+          public static extern uint SetThreadExecutionState(uint esFlags);
+          '@
+          $type = Add-Type -MemberDefinition $code -Name "Win32" -Namespace "Native" -PassThru
+          $type::SetThreadExecutionState(0x80000003)
+
+      - name: Create Strong RDP User
+        run: |
+          $passwordChars = @()
+          $charSet = @{ Upper='A'..'Z'; Lower='a'..'z'; Number='0'..'9'; Special='!@#$%^&*()-_=+[]{}|;:,.<>?' }
+          foreach ($set in $charSet.Values) { $passwordChars += $set | Get-Random -Count 12 }
+          $password = -join ($passwordChars | Get-Random -Count 48)
+          
+          $securePass = ConvertTo-SecureString $password -AsPlainText -Force
+          New-LocalUser -Name "RDP" -Password $securePass -AccountNeverExpires -PasswordNeverExpires:$true
+          Add-LocalGroupMember -Group "Administrators" -Member "RDP"
+          Add-LocalGroupMember -Group "Remote Desktop Users" -Member "RDP"
+          
+          echo "RDP_PASSWORD=$password" >> $env:GITHUB_ENV
+
+      - name: Create Extra Drive X: (300GB on D:)
+        run: |
+          $vhdxPath = "D:\extra_drive.vhdx"
+          New-VHD -Path $vhdxPath -SizeBytes 300GB -Dynamic | Mount-VHD -PassThru | Out-Null
+          
+          Get-Disk | Where-Object PartitionStyle -eq 'RAW' | 
+            Initialize-Disk -PartitionStyle GPT -PassThru |
+            New-Partition -AssignDriveLetter -UseMaximumSize |
+            Format-Volume -FileSystem ReFS -NewFileSystemLabel "AndroidFastDrive" -Confirm:$false -Force
+          
+          $driveLetter = (Get-Partition -DiskNumber (Get-Disk | Where-Object OperationalStatus -eq 'Online' | Select-Object -Last 1).Number | Select-Object -Last 1).DriveLetter
+          echo "EXTRA_DRIVE=${driveLetter}:" >> $env:GITHUB_ENV
+
+      - name: Install Latest Android Studio to D: Drive
+        run: |
+          $installerUrl = "https://redirector.gvt1.com/edgedl/android/studio/install/2025.2.2.7/android-studio-2025.2.2.7-windows.exe"
+          $installerPath = "$env:TEMP\android-studio.exe"
+          Invoke-WebRequest -Uri $installerUrl -OutFile $installerPath
+          
+          Start-Process $installerPath -ArgumentList "/S", "/D=D:\Android\AndroidStudio" -Wait
+          Remove-Item $installerPath -Force
+
+      - name: Accept Licenses & Install SDK Packages
+        run: |
+          & "D:\Android\AndroidStudio\android\sdk\cmdline-tools\latest\bin\sdkmanager.bat" --licenses --sdk_root="D:\Android\sdk" < "$null"
+          & "D:\Android\AndroidStudio\android\sdk\cmdline-tools\latest\bin\sdkmanager.bat" "platform-tools" "platforms;android-35" "system-images;android-35;google_apis;x86_64" "emulator" --sdk_root="D:\Android\sdk"
+
+      - name: Install Latest Tailscale
+        run: |
+          $stablePage = Invoke-WebRequest -Uri "https://pkgs.tailscale.com/stable/" -UseBasicParsing
+          $msiUrl = ($stablePage.Links | Where-Object { $_.href -like "*amd64.msi" } | Select-Object -First 1).href
+          if (-not $msiUrl.StartsWith("http")) { $msiUrl = "https://pkgs.tailscale.com/stable/$msiUrl" }
+          
+          $installerPath = "$env:TEMP\tailscale.msi"
+          Invoke-WebRequest -Uri $msiUrl -OutFile $installerPath
+          Start-Process msiexec.exe -ArgumentList "/i", "`"$installerPath`"", "/quiet", "/norestart" -Wait
+          Remove-Item $installerPath -Force
+
+      - name: Setup Tailscale-Only Firewall
+        run: |
+          netsh advfirewall firewall delete rule name="RDP-Tailscale" | Out-Null
+          netsh advfirewall firewall add rule name="RDP-Tailscale" dir=in action=allow protocol=TCP localport=3389 remoteip=100.64.0.0/10
+
+      - name: Connect Tailscale
+        run: |
+          & "$env:ProgramFiles\Tailscale\tailscale.exe" up --authkey=${{ secrets.TAILSCALE_AUTH_KEY }} --hostname=gh-android-sound-${{ github.run_id }} --accept-routes --accept-dns=false
+          
+          $retries = 0
+          do {
+              Start-Sleep -Seconds 10
+              $tsIP = & "$env:ProgramFiles\Tailscale\tailscale.exe" ip -4
+              $retries++
+          } while (-not $tsIP -and $retries -lt 30)
+          
+          if (-not $tsIP) { Write-Error "Không lấy được Tailscale IP."; exit 1 }
+          echo "TAILSCALE_IP=$tsIP" >> $env:GITHUB_ENV
+
+      - name: Create & Launch Emulator WITH SOUND (GUI Visible)
+        run: |
+          $sdkRoot = "D:\Android\sdk"
+          & "$sdkRoot\cmdline-tools\latest\bin\avdmanager.bat" create avd -n "Pixel_8_API_35" -k "system-images;android-35;google_apis;x86_64" -d "pixel_8"
+          
+          # Config mạnh + sound tốt
+          $configPath = "$env:USERPROFILE\.android\avd\Pixel_8_API_35.avd\config.ini"
+          @"
+          hw.ramSize=8192MB
+          hw.cpu.ncore=12
+          hw.gpu.enabled=yes
+          hw.gpu.mode=auto
+          hw.audioInput=yes
+          hw.audioOutput=yes
+          "@ | Add-Content $configPath
+          
+          # Launch với GUI + BẬT ÂM THANH (không -no-audio)
+          Start-Process "$sdkRoot\emulator\emulator.exe" -ArgumentList "-avd", "Pixel_8_API_35", "-gpu", "auto", "-no-boot-anim" -WindowStyle Normal
+
+      - name: Run Keep-Alive
+        run: |
+          $script = @'
+          while ($true) {
+              $wsh = New-Object -ComObject WScript.Shell
+              $wsh.SendKeys("{SCROLLLOCK}{SCROLLLOCK}")
+              Start-Sleep -Seconds 30
           }
-          
-          Write-Host "Tailscale installed"
-        }
-        finally {
-          Remove-Item $installerPath -Force -ErrorAction SilentlyContinue
-        }
+          '@
+          Start-Process powershell -ArgumentList "-Command", $script -WindowStyle Hidden
 
-    - name: Establish Tailscale Connection
-      shell: powershell
-      run: |
-        $tailscaleExe = "$env:ProgramFiles\Tailscale\tailscale.exe"
-        $maxRetries = 15
-        $retryCount = 0
-        
-        Write-Host "Authenticating with Tailscale..."
-        & $tailscaleExe up --authkey="${{ secrets.TAILSCALE_AUTH_KEY }}" `
-          --hostname="gh-runner-$env:GITHUB_RUN_ID" --force-reauth
-        
-        Write-Host "Waiting for Tailscale IP..."
-        $tsIP = $null
-        
-        while (-not $tsIP -and $retryCount -lt $maxRetries) {
-          Start-Sleep -Seconds 2
-          try {
-            $tsIP = & $tailscaleExe ip -4
-            if ($tsIP) { break }
+      - name: Display Info & Keep Alive
+        run: |
+          Write-Host "`n=================================="
+          Write-Host "   RDP ANDROID DEV WITH SOUND READY!"
+          Write-Host "=================================="
+          Write-Host "Runner: 16 vCPU - IO nhanh"
+          Write-Host "Extra Drive: $env:EXTRA_DRIVE (~300 GB)"
+          Write-Host "Emulator: Pixel 8 API 35 - Có ÂM THANH đầy đủ!"
+          Write-Host "Connect RDP: $env:TAILSCALE_IP"
+          Write-Host "Username: RDP"
+          Write-Host "Password: $env:RDP_PASSWORD"
+          Write-Host "Tips cho SOUND:"
+          Write-Host "- Trong Microsoft Remote Desktop client: Local Resources > Remote audio > Play on this computer"
+          Write-Host "- RDP vào → mở YouTube/TikTok trong emulator → nghe sound rõ ràng trên máy bạn!"
+          Write-Host "- Nếu sound nhỏ: Tăng volume trong Android (swipe down > volume slider)"
+          Write-Host "==================================`n"
+          
+          while ($true) {
+              Write-Host "[$(Get-Date)] RDP + Emulator WITH SOUND active"
+              Start-Sleep -Seconds 600
           }
-          catch {
-            $retryCount++
-          }
-        }
-        
-        if (-not $tsIP) {
-          throw "Failed to obtain Tailscale IP"
-        }
-        
-        echo "TAILSCALE_IP=$tsIP" >> $env:GITHUB_ENV
-        Write-Host "Tailscale IP: $tsIP"
-
-    - name: Verify RDP & Performance
-      shell: powershell
-      run: |
-        $tsIP = $env:TAILSCALE_IP
-        Write-Host "Testing RDP connectivity..."
-        
-        # Test port
-        $testResult = Test-NetConnection -ComputerName $tsIP -Port 3389 -WarningAction SilentlyContinue
-        
-        if (-not $testResult. TcpTestSucceeded) {
-          throw "RDP connectivity failed"
-        }
-        
-        # Verify graphics settings
-        $regPath = 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp'
-        $frameRate = (Get-ItemProperty -Path $regPath -Name "MaxFrameRate" -ErrorAction SilentlyContinue).MaxFrameRate
-        $h264 = (Get-ItemProperty -Path $regPath -Name "fUseH264CodecForNetwork" -ErrorAction SilentlyContinue).fUseH264CodecForNetwork
-        
-        Write-Host "✓ RDP port accessible"
-        Write-Host "✓ Frame rate: $frameRate FPS"
-        Write-Host "✓ H.264 Codec: $(if ($h264) {'Enabled'} else {'Disabled'})"
-
-    - name: Output Connection Details
-      shell: powershell
-      run: |
-        Write-Output "::notice title=RDP Access (60FPS Optimized)::Tailscale IP: $env:TAILSCALE_IP"
-        Write-Output "::add-mask::$env:RDP_PASSWORD"
-
-    - name: Maintain Session
-      shell: powershell
-      run: |
-        Write-Host "═════════════════════════════════════════"
-        Write-Host "RDP SESSION ACTIVE - 60FPS OPTIMIZED"
-        Write-Host "═════════════════════════════════════════"
-        Write-Host "IP: $env:TAILSCALE_IP:3389"
-        Write-Host "Username: RDP"
-        Write-Host "Codec: H.264/AVC"
-        Write-Host "Frame Rate: 60 FPS"
-        Write-Host "Duration: ${{ inputs.duration_minutes || 480 }} minutes"
-        Write-Host "═════════════════════════════════════════"
-        Write-Host ""
-        Write-Host "📊 Performance Settings Applied:"
-        Write-Host "  • H.264/AVC codec enabled"
-        Write-Host "  • Frame rate: 60 FPS"
-        Write-Host "  • Network auto-detection enabled"
-        Write-Host "  • Bandwidth optimization enabled"
-        Write-Host "  • Low-latency mode active"
-        Write-Host "  • GPU acceleration enabled"
-        Write-Host ""
-        
-        $startTime = Get-Date
-        $timeoutMinutes = ${{ inputs.duration_minutes || 480 }}
-        
-        while ($true) {
-          $elapsed = (Get-Date) - $startTime
-          $remaining = New-TimeSpan -Minutes $timeoutMinutes -Seconds $elapsed.TotalSeconds
-          
-          if ($remaining. TotalSeconds -le 0) {
-            Write-Host "Session timeout reached"
-            break
-          }
-          
-          Write-Host "[$(Get-Date -Format 'HH:mm:ss')] Active - Remaining: $($remaining.ToString('hh\:mm\:ss'))"
-          Start-Sleep -Seconds 60
-        }
-
-    # ===== CLEANUP & DATA DELETION SECTION =====
-    
-    - name: Disconnect Tailscale
-      shell: powershell
-      if: always()
-      run: |
-        Write-Host "🔌 Disconnecting Tailscale..."
-        try {
-          $tailscaleExe = "$env:ProgramFiles\Tailscale\tailscale. exe"
-          & $tailscaleExe down
-          Write-Host "✓ Tailscale disconnected"
-        } catch {
-          Write-Host "⚠ Tailscale disconnect warning: $_"
-        }
-
-    - name: Securely Delete RDP User & Data
-      shell: powershell
-      if: always()
-      run: |
-        Write-Host "🗑️ Securely deleting RDP user and associated data..."
-        
-        try {
-          # Kill all sessions by RDP user
-          Write-Host "Terminating RDP user sessions..."
-          Get-Process | Where-Object {$_.UserName -like "*RDP*"} | Stop-Process -Force -ErrorAction SilentlyContinue
-          
-          # Delete RDP user
-          if (Get-LocalUser -Name "RDP" -ErrorAction SilentlyContinue) {
-            Write-Host "Removing RDP user..."
-            Remove-LocalUser -Name "RDP" -Force -ErrorAction SilentlyContinue
-            Write-Host "✓ RDP user removed"
-          }
-          
-          # Remove from groups
-          Write-Host "Removing RDP from groups..."
-          net localgroup administrators RDP /delete /y 2>$null
-          net localgroup "Remote Desktop Users" RDP /delete /y 2>$null
-          
-          # Clear user profile directory
-          $profilePath = "C:\Users\RDP"
-          if (Test-Path $profilePath) {
-            Write-Host "Deleting RDP user profile..."
-            Remove-Item -Path $profilePath -Recurse -Force -ErrorAction SilentlyContinue
-            Write-Host "✓ User profile deleted"
-          }
-          
-          Write-Host "✓ RDP user cleanup completed"
-        } catch {
-          Write-Host "⚠ Error during RDP user deletion: $_"
-        }
-
-    - name: Clear Sensitive Registry Keys
-      shell: powershell
-      if: always()
-      run: |
-        Write-Host "🗝️ Clearing sensitive registry keys..."
-        
-        try {
-          # Clear RDP history
-          $rdpHistoryPath = "HKCU:\Software\Microsoft\Terminal Server Client\Default"
-          if (Test-Path $rdpHistoryPath) {
-            Write-Host "Clearing RDP connection history..."
-            Remove-ItemProperty -Path $rdpHistoryPath -Name "*" -ErrorAction SilentlyContinue
-            Write-Host "✓ RDP history cleared"
-          }
-          
-          # Clear MRU (Most Recently Used)
-          $mruPath = "HKCU:\Software\Microsoft\Terminal Server Client\MRU"
-          if (Test-Path $mruPath) {
-            Write-Host "Clearing RDP MRU..."
-            Remove-Item -Path $mruPath -Recurse -Force -ErrorAction SilentlyContinue
-            Write-Host "✓ RDP MRU cleared"
-          }
-          
-          Write-Host "✓ Registry cleanup completed"
-        } catch {
-          Write-Host "⚠ Registry cleanup warning: $_"
-        }
-
-    - name: Clear Temporary Files
-      shell: powershell
-      if: always()
-      run: |
-        Write-Host "🧹 Clearing temporary files..."
-        
-        $pathsToClean = @(
-          "$env:TEMP",
-          "$env:WINDIR\Temp",
-          "$env:LOCALAPPDATA\Temp",
-          "C:\Windows\SoftwareDistribution\Download",
-          "$env:APPDATA\Tailscale"
-        )
-        
-        foreach ($path in $pathsToClean) {
-          try {
-            if (Test-Path $path) {
-              Write-Host "Cleaning: $path"
-              Remove-Item -Path "$path\*" -Recurse -Force -ErrorAction SilentlyContinue
-              Write-Host "✓ $path cleaned"
-            }
-          } catch {
-            Write-Host "⚠ Error cleaning $path : $_"
-          }
-        }
-        
-        Write-Host "✓ Temporary files cleanup completed"
-
-    - name: Remove Firewall Rules
-      shell: powershell
-      if: always()
-      run: |
-        Write-Host "🔥 Removing firewall rules..."
-        
-        try {
-          # Remove RDP firewall rule
-          netsh advfirewall firewall delete rule name="RDP-Tailscale" 2>$null
-          Write-Host "✓ RDP firewall rule removed"
-          
-          # Remove QoS policy if exists
-          Remove-NetQosPolicy -Name "RDP-HighPriority" -Confirm:$false -ErrorAction SilentlyContinue
-          Write-Host "✓ QoS policy removed"
-        } catch {
-          Write-Host "⚠ Firewall cleanup warning: $_"
-        }
-
-    - name: Restore System Settings
-      shell: powershell
-      if: always()
-      run: |
-        Write-Host "⚙️ Restoring system settings..."
-        
-        try {
-          # Re-enable disabled services
-          $servicesToRestore = @(
-            "WinSearch",
-            "DiagTrack",
-            "gpUpdate"
-          )
-          
-          foreach ($service in $servicesToRestore) {
-            try {
-              Set-Service -Name $service -StartupType Automatic -ErrorAction SilentlyContinue
-              Start-Service -Name $service -ErrorAction SilentlyContinue
-              Write-Host "✓ Restored: $service"
-            } catch {}
-          }
-          
-          # Restore balanced power plan
-          powercfg /setactive 381b4222-f694-41f0-9685-ff5bb260df2e
-          Write-Host "✓ Power plan restored to Balanced"
-          
-          # Restore monitor timeout
-          powercfg /change monitor-timeout-ac 10
-          Write-Host "✓ Monitor timeout restored"
-          
-        } catch {
-          Write-Host "⚠ System restore warning: $_"
-        }
-
-    - name: Clear Event Logs
-      shell: powershell
-      if: always()
-      run: |
-        Write-Host "📋 Clearing event logs..."
-        
-        try {
-          $logNames = @(
-            "System",
-            "Application",
-            "Security"
-          )
-          
-          foreach ($logName in $logNames) {
-            try {
-              Clear-EventLog -LogName $logName -ErrorAction SilentlyContinue
-              Write-Host "✓ $logName log cleared"
-            } catch {
-              Write-Host "⚠ Error clearing $logName log"
-            }
-          }
-        } catch {
-          Write-Host "⚠ Event log cleanup warning: $_"
-        }
-
-    - name: Securely Wipe Free Space (Optional - Time Intensive)
-      shell: powershell
-      if: always()
-      run: |
-        Write-Host "⚡ Secure deletion info: Use cipher /w:C: for production"
-        Write-Host "   (Skipped due to time constraints - can run manually)"
-        Write-Host ""
-        Write-Host "To manually wipe free space after workflow:"
-        Write-Host "  1. Open PowerShell as Administrator"
-        Write-Host "  2. Run: cipher /w:C:"
-        Write-Host "  3. This will securely overwrite all free space"
-
-    - name: Final Cleanup & Status Report
-      shell: powershell
-      if: always()
-      run: |
-        Write-Host ""
-        Write-Host "╔════════════════════════════════════════╗"
-        Write-Host "║   CLEANUP & DATA DELETION COMPLETED   ║"
-        Write-Host "╚════════════════════════════════════════╝"
-        Write-Host ""
-        Write-Host "✅ Completed Actions:"
-        Write-Host "  ✓ Tailscale disconnected"
-        Write-Host "  ✓ RDP user deleted (including profile)"
-        Write-Host "  ✓ Sensitive registry keys cleared"
-        Write-Host "  ✓ Temporary files removed"
-        Write-Host "  ✓ Firewall rules deleted"
-        Write-Host "  ✓ System settings restored"
-        Write-Host "  ✓ Event logs cleared"
-        Write-Host ""
-        Write-Host "📊 Cleanup Verification:"
-        
-        # Verify RDP user is gone
-        if (-not (Get-LocalUser -Name "RDP" -ErrorAction SilentlyContinue)) {
-          Write-Host "  ✓ RDP user verified deleted"
-        } else {
-          Write-Host "  ⚠ RDP user still exists"
-        }
-        
-        # Verify firewall rule is gone
-        $rule = Get-NetFirewallRule -DisplayName "RDP-Tailscale" -ErrorAction SilentlyContinue
-        if (-not $rule) {
-          Write-Host "  ✓ Firewall rules verified deleted"
-        } else {
-          Write-Host "  ⚠ Firewall rule still exists"
-        }
-        
-        Write-Host ""
-        Write-Host "🔒 Security Status: CLEAN"
-        Write-Host "🗑️  Data Status: SECURELY DELETED"
-        Write-Host "🖥️  System Status: RESTORED"
