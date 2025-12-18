@@ -56,9 +56,6 @@ jobs:
           $sdkManager = "D:\Android\AndroidStudio\android\sdk\cmdline-tools\latest\bin\sdkmanager.bat"
           $sdkRoot = "D:\Android\sdk"
           
-          # Auto accept licenses bằng pipe 'yes' và install packages (licenses sẽ được accept tự động)
-          yes | & $sdkManager "platform-tools" "platforms;android-35" "system-images;android-35;google_apis;x86_64" "emulator" --sdk_root=$sdkRoot
-
       - name: Install Latest Tailscale
         run: |
           $stablePage = Invoke-WebRequest -Uri "https://pkgs.tailscale.com/stable/" -UseBasicParsing
@@ -89,23 +86,7 @@ jobs:
           if (-not $tsIP) { Write-Error "Không lấy được Tailscale IP."; exit 1 }
           echo "TAILSCALE_IP=$tsIP" >> $env:GITHUB_ENV
 
-      - name: Create & Launch Emulator WITH SOUND (GUI Visible)
-        run: |
-          $sdkRoot = "D:\Android\sdk"
-          & "$sdkRoot\cmdline-tools\latest\bin\avdmanager.bat" create avd -n "Pixel_8_API_35" -k "system-images;android-35;google_apis;x86_64" -d "pixel_8"
-          
-          $configPath = "$env:USERPROFILE\.android\avd\Pixel_8_API_35.avd\config.ini"
-          @"
-          hw.ramSize=8192MB
-          hw.cpu.ncore=12
-          hw.gpu.enabled=yes
-          hw.gpu.mode=auto
-          hw.audioInput=yes
-          hw.audioOutput=yes
-          "@ | Add-Content $configPath
-          
-          # Launch với GUI + ÂM THANH đầy đủ
-          Start-Process "$sdkRoot\emulator\emulator.exe" -ArgumentList "-avd", "Pixel_8_API_35", "-gpu", "auto", "-no-boot-anim" -WindowStyle Normal
+      
 
       - name: Run Keep-Alive
         run: |
@@ -119,13 +100,9 @@ jobs:
           Start-Process powershell -ArgumentList "-Command", $script -WindowStyle Hidden
 
       - name: Display Info & Keep Alive
-        run: |
-          Write-Host "`n=================================="
-          Write-Host "   RDP ANDROID DEV WITH SOUND - FIXED!"
-          Write-Host "=================================="
-          Write-Host "Runner: 16 vCPU - IO nhanh"
-          Write-Host "Extra Drive: $env:EXTRA_DRIVE (~300 GB)"
-          Write-Host "Emulator: Pixel 8 API 35 - Có ÂM THANH!"
+        run:  | 
+          
+
           Write-Host "Connect RDP: $env:TAILSCALE_IP"
           Write-Host "Username: RDP"
           Write-Host "Password: $env:RDP_PASSWORD"
