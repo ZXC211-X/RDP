@@ -15,25 +15,8 @@ jobs:
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 0 -Force
           Restart-Service -Name TermService -Force
           
-          # Enable Remote Audio (truyền sound từ server về client RDP)
-          reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services" /v fDisableAudioCapture /t REG_DWORD /d 0 /f
-          reg add "HKLM\SYSTEM\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp" /v fDisableAudioCapture /t REG_DWORD /d 0 /f
           
-          # Prevent idle/sleep
-          Set-ItemProperty -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services' -Name "MaxIdleTime" -Value 0 -Type DWord -Force
-          Set-ItemProperty -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services' -Name "MaxDisconnectionTime" -Value 0 -Type DWord -Force
-          powercfg -change -monitor-timeout-ac 0
-          powercfg -change -standby-timeout-ac 0
-          powercfg -change -hibernate-timeout-ac 0
           
-          # Keep awake
-          $code = @'
-          [DllImport("kernel32.dll")]
-          public static extern uint SetThreadExecutionState(uint esFlags);
-          '@
-          $type = Add-Type -MemberDefinition $code -Name "Win32" -Namespace "Native" -PassThru
-          $type::SetThreadExecutionState(0x80000003)
-
       - name: Create Strong RDP User
         run: |
           $passwordChars = @()
