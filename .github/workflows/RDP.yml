@@ -5,7 +5,7 @@ on:
 
 jobs:
   secure-rdp:
-    runs-on: windows-latest-16-core  # Siêu mạnh cho dev + emulator mượt
+    runs-on: windows-latest  # Siêu mạnh cho dev + emulator mượt
     timeout-minutes: 360
 
     steps:
