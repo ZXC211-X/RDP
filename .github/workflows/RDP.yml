@@ -23,26 +23,6 @@ jobs:
     timeout-minutes: 360
 
     steps:
-      - name: "🎯 System Info & Pre-checks"
-        run: |
-          Write-Host "════════════════════════════════════════" -ForegroundColor Magenta
-          Write-Host "Advanced RDP System Initialization" -ForegroundColor Green
-          Write-Host "════════════════════════════════════════" -ForegroundColor Magenta
-          
-          $osInfo = Get-WmiObject -Class Win32_OperatingSystem
-          $cpuInfo = Get-WmiObject -Class Win32_Processor
-          $ramInfo = Get-WmiObject -Class Win32_ComputerSystem
-          
-          Write-Host "`n📊 System Information:" -ForegroundColor Cyan
-          Write-Host "  OS: $($osInfo.Caption)" -ForegroundColor Gray
-          Write-Host "  Processor: $($cpuInfo. Name)" -ForegroundColor Gray
-          Write-Host "  Cores: $($cpuInfo.NumberOfCores)" -ForegroundColor Gray
-          Write-Host "  RAM: $([math]::Round($ramInfo.TotalPhysicalMemory/1GB))GB" -ForegroundColor Gray
-          Write-Host "  Build: $($osInfo.BuildNumber)" -ForegroundColor Gray
-          
-          # Set environment variables (NO SPACES!)
-          echo "PERF_MODE=${{ github.event.inputs.performance_mode }}" >> $env: GITHUB_ENV
-          echo "STORAGE_SIZE=${{ github.event.inputs.storage_size }}" >> $env:GITHUB_ENV
 
       - name: "🔧 Advanced Service Management"
         run: |
