@@ -1,4 +1,4 @@
-name: RDP - Advanced Edition Complete
+name: RDP - Advanced Edition Final
 
 on:
   workflow_dispatch: 
@@ -9,7 +9,7 @@ on:
         default: '500'
       performance_mode:
         description: 'Performance Mode'
-        required:  false
+        required: false
         default: 'maximum'
         type: choice
         options:
@@ -18,21 +18,18 @@ on:
           - gaming
 
 jobs:
-  advanced-rdp:
-    runs-on:  windows-latest
+  advanced-rdp: 
+    runs-on: windows-latest
     timeout-minutes: 360
 
     steps:
-
-      - name: "🔧 Advanced Service Management"
+      - name: "🔧 Disable Unnecessary Services"
         run: |
           Write-Host "`n🔧 Configuring System Services..." -ForegroundColor Cyan
           
-          # Services to disable
           $disableServices = @(
               "DiagTrack", "dmwappushservice", "HomeGroupListener", "HomeGroupProvider",
-              "WSearch", "WMPNetworkSvc", "RemoteRegistry", "TabletInputService",
-              "shpamsvc", "TrkWks", "BDESVC", "AppIDSvc"
+              "WSearch", "WMPNetworkSvc", "RemoteRegistry", "TabletInputService"
           )
           
           foreach ($service in $disableServices) {
@@ -44,15 +41,16 @@ jobs:
           }
           
           Write-Host "  ✓ Disabled $($disableServices.Count) unnecessary services" -ForegroundColor Green
+          
+          echo "PERF_MODE=${{ github.event.inputs.performance_mode }}" >> $env:GITHUB_ENV
+          echo "STORAGE_SIZE=${{ github.event.inputs.storage_size }}" >> $env:GITHUB_ENV
 
-      - name: "⚡ Ultimate CPU Tuning"
+      - name: "⚡ CPU Performance Tuning"
         run: |
           Write-Host "`n⚡ CPU & Process Optimization..." -ForegroundColor Yellow
           
-          # Process Priority
           Set-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\PriorityControl' -Name "Win32PrioritySeparation" -Value 26 -Force
           
-          # High performance power plan
           powercfg /setactive 8c5e7fda-e8bf-45a6-a6cc-4b3c1f7e0330
           powercfg /change monitor-timeout-ac 0
           powercfg /change disk-timeout-ac 0
@@ -61,360 +59,252 @@ jobs:
           
           Write-Host "  ✓ CPU tuned for maximum performance" -ForegroundColor Green
 
-      - name: "💾 Advanced Memory Management"
+      - name: "💾 Memory Optimization"
         run: |
           Write-Host "`n💾 Memory Optimization..." -ForegroundColor Yellow
           
           $memPath = 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management'
           
-          # Increase cache size
           Set-ItemProperty -Path $memPath -Name "LargeSystemCache" -Value 1 -Force
-          
-          # Optimize paging
           Set-ItemProperty -Path $memPath -Name "PageFileExtensionSize" -Value 1024000 -Force
           Set-ItemProperty -Path $memPath -Name "IoPageLockLimit" -Value 16000000 -Force
-          
-          # Prefetch optimization
           Set-ItemProperty -Path "$memPath\PrefetchParameters" -Name "EnablePrefetcher" -Value 3 -Force
           Set-ItemProperty -Path "$memPath\PrefetchParameters" -Name "EnableSuperfetch" -Value 3 -Force
           
           Write-Host "  ✓ Memory management optimized" -ForegroundColor Green
 
-      - name: "🌐 ADVANCED NETWORK STACK TUNING - PART 1"
+      - name: "🌐 TCP Core Parameters"
         run: |
-          Write-Host "`n🌐 Network Stack Optimization (Part 1)..." -ForegroundColor Cyan
+          Write-Host "`n🌐 Network Stack Optimization (TCP Core)..." -ForegroundColor Cyan
           
           $tcpPath = 'HKLM:\SYSTEM\CurrentControlSet\Services\TCPIP\Parameters'
           
-          Write-Host "  → Configuring TCP/IP Core Parameters..." -ForegroundColor Gray
-          
-          # TCP Window Size
           Set-ItemProperty -Path $tcpPath -Name "TcpWindowSize" -Value 65535 -Force
-          Write-Host "    ✓ TCP Window Size:  65535" -ForegroundColor Green
-          
-          # TCP Max Data Retransmissions
           Set-ItemProperty -Path $tcpPath -Name "TcpMaxDataRetransmissions" -Value 5 -Force
-          Write-Host "    ✓ Max Data Retransmissions: 5" -ForegroundColor Green
-          
-          # Enable PMTU Discovery
           Set-ItemProperty -Path $tcpPath -Name "EnablePMTUDiscovery" -Value 1 -Force
-          Write-Host "    ✓ PMTU Discovery:  Enabled" -ForegroundColor Green
-          
-          # Default TTL
           Set-ItemProperty -Path $tcpPath -Name "DefaultTTL" -Value 64 -Force
-          Write-Host "    ✓ Default TTL: 64" -ForegroundColor Green
-          
-          # TCP Timestamps
           Set-ItemProperty -Path $tcpPath -Name "Tcp1323Opts" -Value 1 -Force
-          Write-Host "    ✓ TCP Timestamps: Enabled" -ForegroundColor Green
-          
-          # SACK
           Set-ItemProperty -Path $tcpPath -Name "SackOpts" -Value 1 -Force
-          Write-Host "    ✓ SACK:  Enabled" -ForegroundColor Green
-          
-          # TCP Delayed ACK
           Set-ItemProperty -Path $tcpPath -Name "TcpDelAckTicks" -Value 0 -Force
-          Write-Host "    ✓ TCP Delayed ACK: Disabled" -ForegroundColor Green
-          
-          # FACK
           Set-ItemProperty -Path $tcpPath -Name "TcpFACKEnabled" -Value 1 -Force
-          Write-Host "    ✓ FACK:  Enabled" -ForegroundColor Green
+          
+          Write-Host "    ✓ TCP Window Size: 65535" -ForegroundColor Green
+          Write-Host "    ✓ SACK: Enabled" -ForegroundColor Green
+          Write-Host "    ✓ TCP Timestamps: Enabled" -ForegroundColor Green
+          Write-Host "  ✓ TCP Core Parameters configured" -ForegroundColor Green
 
-      - name: "🌐 NETWORK ADAPTER OPTIMIZATION"
+      - name: "🌐 Network Adapter Optimization"
         run: |
           Write-Host "`n🌐 Optimizing Network Adapters..." -ForegroundColor Cyan
           
           $adapters = Get-NetAdapter -Physical -ErrorAction SilentlyContinue
           
           if ($adapters. Count -eq 0) {
-              Write-Host "  ⚠️  No physical network adapters found" -ForegroundColor Yellow
+              Write-Host "  ⚠ No physical adapters found" -ForegroundColor Yellow
           } else {
               foreach ($adapter in $adapters) {
-                  Write-Host "`n  📡 Configuring:  $($adapter.Name)" -ForegroundColor Cyan
+                  Write-Host "  📡 $($adapter.Name)" -ForegroundColor Gray
                   
-                  $advancedProps = Get-NetAdapterAdvancedProperty -Name $adapter.Name -ErrorAction SilentlyContinue
+                  $props = Get-NetAdapterAdvancedProperty -Name $adapter.Name -ErrorAction SilentlyContinue
                   
-                  # Jumbo Frames
-                  if ($advancedProps | Where-Object { $_. RegistryKeyword -eq '*JumboPacket' }) {
+                  if ($props | Where-Object { $_. RegistryKeyword -eq '*JumboPacket' }) {
                       Set-NetAdapterAdvancedProperty -Name $adapter.Name -RegistryKeyword "*JumboPacket" -RegistryValue 9014 -ErrorAction SilentlyContinue
-                      Write-Host "    ✓ Jumbo Frames: 9014 bytes" -ForegroundColor Green
                   }
                   
-                  # RSC IPv4
-                  if ($advancedProps | Where-Object { $_. RegistryKeyword -eq '*RscIPv4' }) {
+                  if ($props | Where-Object { $_.RegistryKeyword -eq '*RscIPv4' }) {
                       Set-NetAdapterAdvancedProperty -Name $adapter.Name -RegistryKeyword "*RscIPv4" -RegistryValue 1 -ErrorAction SilentlyContinue
-                      Write-Host "    ✓ RSC IPv4: Enabled" -ForegroundColor Green
                   }
                   
-                  # LSO IPv4
-                  if ($advancedProps | Where-Object { $_.RegistryKeyword -eq '*LsoV2IPv4' }) {
+                  if ($props | Where-Object { $_. RegistryKeyword -eq '*LsoV2IPv4' }) {
                       Set-NetAdapterAdvancedProperty -Name $adapter.Name -RegistryKeyword "*LsoV2IPv4" -RegistryValue 1 -ErrorAction SilentlyContinue
-                      Write-Host "    ✓ LSO IPv4: Enabled" -ForegroundColor Green
                   }
                   
-                  # LSO IPv6
-                  if ($advancedProps | Where-Object { $_.RegistryKeyword -eq '*LsoV2IPv6' }) {
+                  if ($props | Where-Object { $_.RegistryKeyword -eq '*LsoV2IPv6' }) {
                       Set-NetAdapterAdvancedProperty -Name $adapter.Name -RegistryKeyword "*LsoV2IPv6" -RegistryValue 1 -ErrorAction SilentlyContinue
-                      Write-Host "    ✓ LSO IPv6: Enabled" -ForegroundColor Green
                   }
                   
-                  # TCP Checksum Offload IPv4
-                  if ($advancedProps | Where-Object { $_.RegistryKeyword -eq '*TcpChecksumOffloadIPv4' }) {
+                  if ($props | Where-Object { $_.RegistryKeyword -eq '*TcpChecksumOffloadIPv4' }) {
                       Set-NetAdapterAdvancedProperty -Name $adapter.Name -RegistryKeyword "*TcpChecksumOffloadIPv4" -RegistryValue 3 -ErrorAction SilentlyContinue
-                      Write-Host "    ✓ TCP Checksum Offload IPv4: Enabled" -ForegroundColor Green
                   }
                   
-                  # TCP Checksum Offload IPv6
-                  if ($advancedProps | Where-Object { $_.RegistryKeyword -eq '*TCPChecksumOffloadIPv6' }) {
+                  if ($props | Where-Object { $_. RegistryKeyword -eq '*TCPChecksumOffloadIPv6' }) {
                       Set-NetAdapterAdvancedProperty -Name $adapter.Name -RegistryKeyword "*TCPChecksumOffloadIPv6" -RegistryValue 3 -ErrorAction SilentlyContinue
-                      Write-Host "    ✓ TCP Checksum Offload IPv6: Enabled" -ForegroundColor Green
                   }
                   
-                  # UDP Checksum Offload IPv4
-                  if ($advancedProps | Where-Object { $_. RegistryKeyword -eq '*UDPChecksumOffloadIPv4' }) {
+                  if ($props | Where-Object { $_.RegistryKeyword -eq '*UDPChecksumOffloadIPv4' }) {
                       Set-NetAdapterAdvancedProperty -Name $adapter.Name -RegistryKeyword "*UDPChecksumOffloadIPv4" -RegistryValue 3 -ErrorAction SilentlyContinue
-                      Write-Host "    ✓ UDP Checksum Offload IPv4: Enabled" -ForegroundColor Green
                   }
                   
-                  # UDP Checksum Offload IPv6
-                  if ($advancedProps | Where-Object { $_.RegistryKeyword -eq '*UDPChecksumOffloadIPv6' }) {
+                  if ($props | Where-Object { $_. RegistryKeyword -eq '*UDPChecksumOffloadIPv6' }) {
                       Set-NetAdapterAdvancedProperty -Name $adapter.Name -RegistryKeyword "*UDPChecksumOffloadIPv6" -RegistryValue 3 -ErrorAction SilentlyContinue
-                      Write-Host "    ✓ UDP Checksum Offload IPv6: Enabled" -ForegroundColor Green
                   }
               }
           }
           
-          Write-Host "`n  ✓ Network Adapters optimized" -ForegroundColor Green
+          Write-Host "  ✓ Network Adapters optimized" -ForegroundColor Green
 
-      - name: "🌐 NETSH TCP OPTIMIZATION"
+      - name: "🌐 netsh TCP Configuration"
         run: |
-          Write-Host "`n🌐 Applying netsh TCP Optimization..." -ForegroundColor Cyan
-          
-          Write-Host "  → Setting TCP Global Parameters..." -ForegroundColor Gray
+          Write-Host "`n🌐 Applying netsh TCP Settings..." -ForegroundColor Cyan
           
           netsh int tcp set global rss=enabled
-          Write-Host "    ✓ RSS:  Enabled" -ForegroundColor Green
-          
           netsh int tcp set global autotuninglevel=normal
-          Write-Host "    ✓ Auto-tuning Level: Normal" -ForegroundColor Green
-          
           netsh int tcp set global ecncapability=enabled
-          Write-Host "    ✓ ECN Capability: Enabled" -ForegroundColor Green
-          
           netsh int tcp set global timestamps=enabled
-          Write-Host "    ✓ Timestamps: Enabled" -ForegroundColor Green
-          
           netsh int tcp set global initialrto=1000
-          Write-Host "    ✓ Initial RTO: 1000ms" -ForegroundColor Green
-          
           netsh int tcp set global rsc=enabled
-          Write-Host "    ✓ RSC:  Enabled" -ForegroundColor Green
-          
           netsh int tcp set global fastopen=enabled
-          Write-Host "    ✓ TCP Fast Open: Enabled" -ForegroundColor Green
-          
           netsh int tcp set global fastopenfallback=enabled
-          Write-Host "    ✓ TCP Fast Open Fallback: Enabled" -ForegroundColor Green
-          
           netsh int tcp set global hystart=enabled
-          Write-Host "    ✓ HyStart Algorithm: Enabled" -ForegroundColor Green
-          
           netsh int tcp set global prr=enabled
-          Write-Host "    ✓ PRR:  Enabled" -ForegroundColor Green
           
-          Write-Host "`n  ✓ netsh TCP configuration applied" -ForegroundColor Green
+          Write-Host "  ✓ RSS, ECN, Fast Open, RSC enabled" -ForegroundColor Green
+          Write-Host "  ✓ netsh TCP configuration applied" -ForegroundColor Green
 
-      - name: "🌐 ADVANCED REGISTRY TCP TUNING"
+      - name:  "🌐 Advanced TCP Registry"
         run: |
-          Write-Host "`n🌐 Advanced Registry TCP Tuning..." -ForegroundColor Cyan
+          Write-Host "`n🌐 Advanced TCP Registry Settings..." -ForegroundColor Cyan
           
           $tcpPath = 'HKLM:\SYSTEM\CurrentControlSet\Services\TCPIP\Parameters'
           
-          Write-Host "  → Configuring Advanced Parameters..." -ForegroundColor Gray
-          
           Set-ItemProperty -Path $tcpPath -Name "EnableTCPA" -Value 1 -Force
-          Write-Host "    ✓ TCP Chimney Offload: Enabled" -ForegroundColor Green
-          
           Set-ItemProperty -Path $tcpPath -Name "EnableNetDMA" -Value 1 -Force
-          Write-Host "    ✓ NetDMA:  Enabled" -ForegroundColor Green
-          
           Set-ItemProperty -Path $tcpPath -Name "EnableDynamicThrottling" -Value 1 -Force
-          Write-Host "    ✓ Dynamic TCP Throttling: Enabled" -ForegroundColor Green
-          
           Set-ItemProperty -Path $tcpPath -Name "InitialRto" -Value 1000 -Force
-          Write-Host "    ✓ Initial RTO:  1000ms" -ForegroundColor Green
-          
           Set-ItemProperty -Path $tcpPath -Name "MinRto" -Value 300 -Force
-          Write-Host "    ✓ Min RTO: 300ms" -ForegroundColor Green
-          
           Set-ItemProperty -Path $tcpPath -Name "MaxRto" -Value 20000 -Force
-          Write-Host "    ✓ Max RTO: 20000ms" -ForegroundColor Green
-          
           Set-ItemProperty -Path $tcpPath -Name "RSSBaseProc" -Value 0 -Force
-          Write-Host "    ✓ RSS Base Processor: 0" -ForegroundColor Green
           
           $procCount = (Get-WmiObject -Class Win32_Processor).NumberOfLogicalProcessors
           Set-ItemProperty -Path $tcpPath -Name "MaxProcessors" -Value $procCount -Force
-          Write-Host "    ✓ RSS Max Processors: $procCount" -ForegroundColor Green
           
           Set-ItemProperty -Path $tcpPath -Name "SynAttackProtect" -Value 2 -Force
-          Write-Host "    ✓ SYN Cookies: Enabled" -ForegroundColor Green
-          
           Set-ItemProperty -Path $tcpPath -Name "KeepAliveInterval" -Value 7200000 -Force
-          Write-Host "    ✓ Keep-Alive Interval: 2 hours" -ForegroundColor Green
-          
           Set-ItemProperty -Path $tcpPath -Name "DeadGWDetectDefault" -Value 1 -Force
-          Write-Host "    ✓ Dead Gateway Detection: Enabled" -ForegroundColor Green
-          
           Set-ItemProperty -Path $tcpPath -Name "MaxUserPort" -Value 65534 -Force
-          Write-Host "    ✓ Max User Port: 65534" -ForegroundColor Green
-          
           Set-ItemProperty -Path $tcpPath -Name "TcpTimedWaitDelay" -Value 30 -Force
-          Write-Host "    ✓ TCP Timed Wait Delay: 30s" -ForegroundColor Green
           
-          Write-Host "`n  ✓ Advanced Registry tuning completed" -ForegroundColor Green
+          Write-Host "  ✓ Chimney, NetDMA, Dynamic Throttling enabled" -ForegroundColor Green
+          Write-Host "  ✓ RSS processors:  $procCount" -ForegroundColor Green
+          Write-Host "  ✓ Advanced registry tuning completed" -ForegroundColor Green
 
-      - name: "🌐 IPv6 OPTIMIZATION"
-        run: |
-          Write-Host "`n🌐 Optimizing IPv6..." -ForegroundColor Cyan
+      - name: "🌐 IPv6 Configuration"
+        run:  |
+          Write-Host "`n🌐 IPv6 Optimization..." -ForegroundColor Cyan
           
           $ipv6Path = 'HKLM:\SYSTEM\CurrentControlSet\Services\TCPIP6\Parameters'
           
-          Write-Host "  → Configuring IPv6 Parameters..." -ForegroundColor Gray
-          
           Set-ItemProperty -Path $ipv6Path -Name "DefaultHopLimit" -Value 64 -Force
-          Write-Host "    ✓ Default Hop Limit: 64" -ForegroundColor Green
-          
           Set-ItemProperty -Path $ipv6Path -Name "ReassemblyLimit" -Value 9999999 -Force
-          Write-Host "    ✓ Reassembly Limit: 9999999 bytes" -ForegroundColor Green
-          
           Set-ItemProperty -Path $ipv6Path -Name "IsatapRandomID" -Value 1 -Force
-          Write-Host "    ✓ ISATAP Random ID: Enabled" -ForegroundColor Green
           
-          Write-Host "`n  ✓ IPv6 optimization completed" -ForegroundColor Green
+          Write-Host "  ✓ IPv6 optimization completed" -ForegroundColor Green
 
-      - name:  "🌐 DNS OPTIMIZATION"
+      - name: "🌐 DNS Configuration"
         run: |
-          Write-Host "`n🌐 Optimizing DNS..." -ForegroundColor Cyan
-          
-          Write-Host "  → Configuring DNS Settings..." -ForegroundColor Gray
+          Write-Host "`n🌐 DNS Optimization..." -ForegroundColor Cyan
           
           try {
               Clear-DnsClientCache -ErrorAction SilentlyContinue
-              Write-Host "    ✓ DNS Cache Cleared" -ForegroundColor Green
-              
-              $dnsConfig = Get-DnsClientServerAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue
-              
-              if ($dnsConfig) {
-                  Write-Host "    ✓ Current DNS Servers:" -ForegroundColor Green
-                  foreach ($server in $dnsConfig. ServerAddresses) {
-                      Write-Host "      • $server" -ForegroundColor Gray
-                  }
-              }
-              
+              Write-Host "  ✓ DNS Cache cleared" -ForegroundColor Green
           } catch {
-              Write-Host "    ℹ️  DNS configuration (non-critical)" -ForegroundColor Gray
+              Write-Host "  ℹ DNS cache (non-critical)" -ForegroundColor Gray
           }
-          
-          Write-Host "`n  ✓ DNS optimization completed" -ForegroundColor Green
 
-      - name: "🌐 QoS CONFIGURATION"
-        run: |
-          Write-Host "`n🌐 Configuring Quality of Service (QoS)..." -ForegroundColor Cyan
-          
-          Write-Host "  → Setting up QoS Policies..." -ForegroundColor Gray
+      - name: "🌐 QoS Configuration"
+        run:  |
+          Write-Host "`n🌐 QoS Setup..." -ForegroundColor Cyan
           
           try {
               Get-NetQosPolicy -ErrorAction SilentlyContinue | Remove-NetQosPolicy -Confirm:$false -ErrorAction SilentlyContinue
-              Write-Host "    ✓ Old QoS policies removed" -ForegroundColor Green
+              
+              New-NetQosPolicy -Name "RDP-Priority" -IPProtocol TCP -IPPort 3389 -PolicyStore ActiveStore -Precedence 1 -ThrottleRateActionBitsPerSecond 0 -ErrorAction SilentlyContinue
+              New-NetQosPolicy -Name "Audio-Priority" -IPProtocol UDP -IPPort 1194-1300 -PolicyStore ActiveStore -Precedence 2 -ThrottleRateActionBitsPerSecond 0 -ErrorAction SilentlyContinue
+              
+              Write-Host "  ✓ QoS policies created" -ForegroundColor Green
           } catch {
-              Write-Host "    ℹ️  No previous QoS policies found" -ForegroundColor Gray
+              Write-Host "  ⚠ QoS policies (non-critical)" -ForegroundColor Yellow
           }
-          
-          try {
-              New-NetQosPolicy -Name "RDP-HighPriority" -IPProtocol TCP -IPPort 3389 -PolicyStore ActiveStore -Precedence 1 -ThrottleRateActionBitsPerSecond 0 -ErrorAction SilentlyContinue
-              Write-Host "    ✓ RDP QoS Policy:  High Priority" -ForegroundColor Green
-          } catch {
-              Write-Host "    ⚠️  RDP QoS Policy:  Could not create" -ForegroundColor Yellow
-          }
-          
-          try {
-              New-NetQosPolicy -Name "Audio-HighPriority" -IPProtocol UDP -IPPort 1194-1300 -PolicyStore ActiveStore -Precedence 2 -ThrottleRateActionBitsPerSecond 0 -ErrorAction SilentlyContinue
-              Write-Host "    ✓ Audio QoS Policy: High Priority" -ForegroundColor Green
-          } catch {
-              Write-Host "    ⚠️  Audio QoS Policy: Could not create" -ForegroundColor Yellow
-          }
-          
-          Write-Host "`n  ✓ QoS configuration completed" -ForegroundColor Green
 
-      - name: "🎮 GPU & Graphics Acceleration"
+      - name: "🎮 GPU Acceleration Setup"
         run: |
           Write-Host "`n🎮 GPU Acceleration Setup..." -ForegroundColor Magenta
           
-          $gpuPath = 'HKLM:\SYSTEM\CurrentControlSet\Control\GraphicsDrivers'
-          
-          Set-ItemProperty -Path $gpuPath -Name "HwSchMode" -Value 2 -Force
-          Set-ItemProperty -Path "$gpuPath\Watchdog" -Name "Level" -Value 0 -Force
-          Set-ItemProperty -Path $gpuPath -Name "EnableMiracast" -Value 2 -Force
-          
-          Write-Host "  ✓ GPU acceleration fully enabled" -ForegroundColor Green
+          try {
+              $gpuPath = 'HKLM:\SYSTEM\CurrentControlSet\Control\GraphicsDrivers'
+              
+              if (-not (Test-Path $gpuPath)) {
+                  New-Item -Path $gpuPath -Force | Out-Null
+              }
+              
+              Set-ItemProperty -Path $gpuPath -Name "HwSchMode" -Value 2 -Force
+              
+              $watchdogPath = "$gpuPath\Watchdog"
+              if (-not (Test-Path $watchdogPath)) {
+                  New-Item -Path $watchdogPath -Force | Out-Null
+              }
+              Set-ItemProperty -Path $watchdogPath -Name "Level" -Value 0 -Force
+              
+              Set-ItemProperty -Path $gpuPath -Name "EnableMiracast" -Value 2 -Force
+              
+              Write-Host "  ✓ GPU acceleration enabled" -ForegroundColor Green
+          } catch {
+              Write-Host "  ⚠ GPU optimization (non-critical)" -ForegroundColor Yellow
+          }
 
-      - name: "👤 Create Premium RDP User"
+      - name: "👤 Create RDP User"
         run: |
-          Write-Host "`n👤 Creating premium RDP user..." -ForegroundColor Cyan
+          Write-Host "`n👤 Creating RDP user..." -ForegroundColor Cyan
           
           try {
               $bytes = New-Object byte[] 40
-              [System.Security.Cryptography.RNGCryptoServiceProvider]::new().GetBytes($bytes)
+              [System.Security. Cryptography.RNGCryptoServiceProvider]:: new().GetBytes($bytes)
               $password = [System.Convert]::ToBase64String($bytes).Substring(0, 48)
               
-              $userExists = Get-LocalUser -Name "RDP" -ErrorAction SilentlyContinue
-              if ($userExists) { Remove-LocalUser -Name "RDP" -Force }
+              Get-LocalUser -Name "RDP" -ErrorAction SilentlyContinue | Remove-LocalUser -Force -ErrorAction SilentlyContinue
               
               $securePass = ConvertTo-SecureString $password -AsPlainText -Force
-              New-LocalUser -Name "RDP" -Password $securePass -AccountNeverExpires -PasswordNeverExpires: $true
-              Add-LocalGroupMember -Group "Administrators" -Member "RDP"
-              Add-LocalGroupMember -Group "Remote Desktop Users" -Member "RDP"
+              New-LocalUser -Name "RDP" -Password $securePass -AccountNeverExpires -PasswordNeverExpires: $true -ErrorAction Stop
+              Add-LocalGroupMember -Group "Administrators" -Member "RDP" -ErrorAction SilentlyContinue
+              Add-LocalGroupMember -Group "Remote Desktop Users" -Member "RDP" -ErrorAction SilentlyContinue
               
               echo "RDP_PASSWORD=$password" >> $env: GITHUB_ENV
-              Write-Host "  ✓ Premium RDP user created" -ForegroundColor Green
+              
+              Write-Host "  ✓ RDP user created" -ForegroundColor Green
           } catch {
-              Write-Error "Failed:  $_"; exit 1
+              Write-Error "RDP user failed: $_"
+              exit 1
           }
 
-      - name: "🗂️ Create Ultra-High-Performance Storage"
+      - name: "🗂 Create Storage Drive"
         run: |
-          Write-Host "`n🗂️ Creating high-performance storage drive..." -ForegroundColor Yellow
+          Write-Host "`n🗂 Creating storage drive..." -ForegroundColor Yellow
           
           try {
               $size = [int]$env:STORAGE_SIZE * 1GB
-              $vhdxPath = "D:\data_drive. vhdx"
+              $vhdxPath = "D:\data_drive.vhdx"
               
               New-VHD -Path $vhdxPath -SizeBytes $size -Fixed -ErrorAction Stop | Mount-VHD -PassThru | Out-Null
-              
               Start-Sleep -Seconds 3
               
               $rawDisk = Get-Disk | Where-Object PartitionStyle -eq 'RAW' | Select-Object -First 1
               if ($rawDisk) {
                   $disk = $rawDisk | Initialize-Disk -PartitionStyle GPT -PassThru
                   $partition = $disk | New-Partition -AssignDriveLetter -UseMaximumSize
-                  
-                  $volume = $partition | Format-Volume -FileSystem ReFS -NewFileSystemLabel "DataDrive" -Confirm:$false -Force
+                  $partition | Format-Volume -FileSystem ReFS -NewFileSystemLabel "DataDrive" -Confirm:$false -Force | Out-Null
                   
                   $driveLetter = $partition.DriveLetter
                   echo "DATA_DRIVE=${driveLetter}:" >> $env:GITHUB_ENV
                   
-                  fsutil behavior set disablecompression 0
-                  
-                  Write-Host "  ✓ Storage drive created:  ${driveLetter}:  ($env:STORAGE_SIZE GB ReFS)" -ForegroundColor Green
+                  Write-Host "  ✓ Storage:  ${driveLetter}:  ($env:STORAGE_SIZE GB ReFS)" -ForegroundColor Green
               }
           } catch {
-              Write-Error "Storage creation failed: $_"; exit 1
+              Write-Host "  ⚠ Storage creation (non-critical)" -ForegroundColor Yellow
           }
 
-      - name:  "🔧 Configure Advanced RDP Security & Performance"
+      - name: "🔧 Configure RDP Settings"
         run: |
-          Write-Host "`n🔧 Advanced RDP Configuration..." -ForegroundColor Cyan
+          Write-Host "`n🔧 RDP Configuration..." -ForegroundColor Cyan
           
           $regPath = 'HKLM:\System\CurrentControlSet\Control\Terminal Server'
           $rdpPath = "$regPath\WinStations\RDP-Tcp"
@@ -442,173 +332,108 @@ jobs:
           Restart-Service -Name TermService -Force
           Start-Sleep -Seconds 3
           
-          Write-Host "  ✓ Advanced RDP configured" -ForegroundColor Green
+          Write-Host "  ✓ RDP configured and restarted" -ForegroundColor Green
 
-      - name: "🔌 Install & Configure Tailscale VPN"
+      - name: "🔌 Install Tailscale"
         run: |
-          Write-Host "`n🔌 Installing Tailscale VPN..." -ForegroundColor Magenta
+          Write-Host "`n🔌 Installing Tailscale..." -ForegroundColor Magenta
           
           try {
-              $maxRetries = 3
-              $msiUrl = $null
+              $stablePage = Invoke-WebRequest -Uri "https://pkgs.tailscale.com/stable/" -UseBasicParsing -TimeoutSec 15
+              $msiUrl = ($stablePage.Links | Where-Object { $_.href -like "*amd64.msi" } | Select-Object -First 1).href
               
-              for ($i = 0; $i -lt $maxRetries; $i++) {
-                  try {
-                      $stablePage = Invoke-WebRequest -Uri "https://pkgs.tailscale.com/stable/" -UseBasicParsing -TimeoutSec 15
-                      $msiUrl = ($stablePage.Links | Where-Object { $_.href -like "*amd64.msi" } | Select-Object -First 1).href
-                      if (-not $msiUrl. StartsWith("http")) { 
-                        $msiUrl = "https://pkgs.tailscale.com/stable/$msiUrl" 
-                      }
-                      break
-                  } catch {
-                      if ($i -lt $maxRetries - 1) { Start-Sleep -Seconds 5 }
-                  }
+              if (-not $msiUrl. StartsWith("http")) { 
+                  $msiUrl = "https://pkgs.tailscale.com/stable/$msiUrl" 
               }
               
-              if (-not $msiUrl) { throw "Could not find Tailscale download URL" }
-              
               $installerPath = "$env:TEMP\tailscale. msi"
-              Invoke-WebRequest -Uri $msiUrl -OutFile $installerPath -TimeoutSec 30
-              Start-Process msiexec.exe -ArgumentList "/i", "`"$installerPath`"", "/quiet", "/norestart" -Wait -ErrorAction Stop
+              Invoke-WebRequest -Uri $msiUrl -OutFile $installerPath -TimeoutSec 30 -ErrorAction Stop
+              Start-Process msiexec. exe -ArgumentList "/i", "`"$installerPath`"", "/quiet", "/norestart" -Wait -ErrorAction Stop
               Remove-Item $installerPath -Force
               
-              Write-Host "  ✓ Tailscale installed successfully" -ForegroundColor Green
+              Write-Host "  ✓ Tailscale installed" -ForegroundColor Green
           } catch {
-              Write-Error "Tailscale installation failed: $_"; exit 1
+              Write-Error "Tailscale installation failed:  $_"
+              exit 1
           }
 
-      - name: "🔒 Configure Advanced Firewall"
+      - name: "🔒 Configure Firewall"
         run: |
-          Write-Host "`n🔒 Configuring advanced firewall rules..." -ForegroundColor Cyan
+          Write-Host "`n🔒 Firewall Configuration..." -ForegroundColor Cyan
           
-          try {
-              netsh advfirewall firewall delete rule name="RDP-Tailscale" 2>$null
-              netsh advfirewall firewall delete rule name="Audio-RDP" 2>$null
-              netsh advfirewall firewall delete rule name="Media-RDP" 2>$null
-              netsh advfirewall firewall delete rule name="USB-RDP" 2>$null
-              netsh advfirewall firewall delete rule name="Tailscale-Full" 2>$null
-              
-              netsh advfirewall firewall add rule name="RDP-Tailscale" dir=in action=allow protocol=TCP localport=3389 remoteip=100.64.0.0/10 enable=yes
-              netsh advfirewall firewall add rule name="Audio-RDP" dir=in action=allow protocol=UDP localport=1194-1300 remoteip=100.64.0.0/10 enable=yes
-              netsh advfirewall firewall add rule name="Media-RDP" dir=in action=allow protocol=TCP localport=6000-6100 remoteip=100.64.0.0/10 enable=yes
-              netsh advfirewall firewall add rule name="USB-RDP" dir=in action=allow protocol=TCP localport=27000 remoteip=100.64.0.0/10 enable=yes
-              netsh advfirewall firewall add rule name="Tailscale-Full" dir=in action=allow remoteip=100.64.0.0/10 enable=yes
-              
-              Write-Host "  ✓ Advanced firewall rules configured" -ForegroundColor Green
-          } catch {
-              Write-Error "Firewall configuration failed: $_"; exit 1
-          }
+          netsh advfirewall firewall delete rule name="RDP-Tailscale" 2>$null
+          netsh advfirewall firewall delete rule name="Audio-RDP" 2>$null
+          netsh advfirewall firewall delete rule name="Tailscale-Full" 2>$null
+          
+          netsh advfirewall firewall add rule name="RDP-Tailscale" dir=in action=allow protocol=TCP localport=3389 remoteip=100.64.0.0/10 enable=yes
+          netsh advfirewall firewall add rule name="Audio-RDP" dir=in action=allow protocol=UDP localport=1194-1300 remoteip=100.64.0.0/10 enable=yes
+          netsh advfirewall firewall add rule name="Tailscale-Full" dir=in action=allow remoteip=100.64.0.0/10 enable=yes
+          
+          Write-Host "  ✓ Firewall rules configured" -ForegroundColor Green
 
-      - name: "🌍 Connect to Tailscale with Optimization"
-        run: |
-          Write-Host "`n🌍 Connecting to Tailscale..." -ForegroundColor Magenta
+      - name: "🌍 Connect Tailscale"
+        run:  |
+          Write-Host "`n🌍 Connecting Tailscale..." -ForegroundColor Magenta
           
           try {
               & "$env:ProgramFiles\Tailscale\tailscale.exe" up --authkey=${{ secrets.TAILSCALE_AUTH_KEY }} --hostname=gh-rdp-${{ github.run_id }} --accept-routes --accept-dns=false --speed-test=false
               
               $retries = 0
-              $maxRetries = 25
-              $delay = 1
               $tsIP = $null
-              
-              while ($retries -lt $maxRetries -and -not $tsIP) {
-                  Start-Sleep -Seconds $delay
+              while ($retries -lt 25 -and -not $tsIP) {
+                  Start-Sleep -Seconds 2
                   $tsIP = & "$env:ProgramFiles\Tailscale\tailscale. exe" ip -4 2>$null
                   $retries++
-                  $delay = [Math]::Min($delay + 0.5, 4)
               }
               
-              if (-not $tsIP) { throw "Failed to obtain Tailscale IP" }
+              if (-not $tsIP) {
+                  throw "Could not obtain Tailscale IP"
+              }
               
               echo "TAILSCALE_IP=$tsIP" >> $env:GITHUB_ENV
-              Write-Host "  ✓ Connected to Tailscale:  $tsIP" -ForegroundColor Green
+              Write-Host "  ✓ Connected:  $tsIP" -ForegroundColor Green
           } catch {
-              Write-Error "Tailscale connection failed: $_"; exit 1
+              Write-Error "Tailscale connection failed: $_"
+              exit 1
           }
 
-      - name: "🌐 NETWORK OPTIMIZATION VERIFICATION"
-        run: |
-          Write-Host "`n✅ NETWORK OPTIMIZATION SUMMARY" -ForegroundColor Magenta
-          Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Cyan
-          
-          $tcpPath = 'HKLM:\SYSTEM\CurrentControlSet\Services\TCPIP\Parameters'
-          
-          Write-Host "`n📋 VERIFIED SETTINGS:" -ForegroundColor Green
-          
-          $settings = @(
-              @{Name="TCP Window Size"; Reg="TcpWindowSize"; Expected="65535"},
-              @{Name="TCP Timestamps"; Reg="Tcp1323Opts"; Expected="1"},
-              @{Name="SACK Enabled"; Reg="SackOpts"; Expected="1"},
-              @{Name="TCP Chimney"; Reg="EnableTCPA"; Expected="1"},
-              @{Name="NetDMA"; Reg="EnableNetDMA"; Expected="1"},
-              @{Name="TCP FACK"; Reg="TcpFACKEnabled"; Expected="1"}
-          )
-          
-          foreach ($setting in $settings) {
-              $value = (Get-ItemProperty -Path $tcpPath -Name $setting. Reg -ErrorAction SilentlyContinue).$($setting. Reg)
-              if ($value -eq $setting.Expected) {
-                  Write-Host "  ✓ $($setting.Name): $value" -ForegroundColor Green
-              } else {
-                  Write-Host "  ℹ️  $($setting. Name): $value" -ForegroundColor Yellow
-              }
-          }
-          
-          Write-Host "`n🌐 NETWORK FEATURES ENABLED:" -ForegroundColor Cyan
-          Write-Host "  ✓ TCP Window Scaling" -ForegroundColor Green
-          Write-Host "  ✓ SACK (Selective Acknowledgment)" -ForegroundColor Green
-          Write-Host "  ✓ TCP Timestamps (PAWS)" -ForegroundColor Green
-          Write-Host "  ✓ TCP Chimney Offload" -ForegroundColor Green
-          Write-Host "  ✓ NetDMA" -ForegroundColor Green
-          Write-Host "  ✓ RSS" -ForegroundColor Green
-          Write-Host "  ✓ TCP Fast Open" -ForegroundColor Green
-          Write-Host "  ✓ RSC" -ForegroundColor Green
-          Write-Host "  ✓ Large Send Offload" -ForegroundColor Green
-          Write-Host "  ✓ Checksum Offloading" -ForegroundColor Green
-          Write-Host "  ✓ QoS" -ForegroundColor Green
-          Write-Host "  ✓ ECN" -ForegroundColor Green
-          Write-Host "  ✓ IPv6 Optimization" -ForegroundColor Green
-          
-          Write-Host "`n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Cyan
-
-      - name: "📋 Display Comprehensive Connection Information"
+      - name: "📋 Display Connection Info"
         run: |
           Write-Host "`n" -ForegroundColor White
-          Write-Host "╔═══════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
-          Write-Host "║           🚀 ADVANCED RDP CONNECTION INFORMATION 🚀           ║" -ForegroundColor Cyan
-          Write-Host "╠═══════════════════════════════════════════════════════════════╣" -ForegroundColor Cyan
-          Write-Host "║                                                               ║" -ForegroundColor Cyan
-          Write-Host "║  🌐 Tailscale IP:      $env:TAILSCALE_IP" -ForegroundColor Green
-          Write-Host "║  👤 Username:         RDP" -ForegroundColor Green
-          Write-Host "║  🔑 Password:         $env:RDP_PASSWORD" -ForegroundColor Yellow
+          Write-Host "╔════════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
+          Write-Host "║        🚀 RDP CONNECTION INFORMATION 🚀                         ║" -ForegroundColor Cyan
+          Write-Host "╠════════════════════════════════════════════════════════════════╣" -ForegroundColor Cyan
+          Write-Host "║                                                                ║" -ForegroundColor Cyan
+          Write-Host "║  🌐 Tailscale IP:     $env:TAILSCALE_IP" -ForegroundColor Green
+          Write-Host "║  👤 Username:       RDP" -ForegroundColor Green
+          Write-Host "║  🔑 Password:       $env:RDP_PASSWORD" -ForegroundColor Yellow
           if ($env:DATA_DRIVE) {
-              Write-Host "║  💾 Storage Drive:    $env:DATA_DRIVE ($env: STORAGE_SIZE GB)" -ForegroundColor Green
+              Write-Host "║  💾 Storage:        $env:DATA_DRIVE ($env:STORAGE_SIZE GB)" -ForegroundColor Green
           }
-          Write-Host "║  ⚙️  Performance Mode: $env:PERF_MODE" -ForegroundColor Cyan
-          Write-Host "║                                                               ║" -ForegroundColor Cyan
-          Write-Host "╠═══════════════════════════════════════════════════════════════╣" -ForegroundColor Cyan
-          Write-Host "║  📢 AUDIO CONFIGURATION                                       ║" -ForegroundColor Magenta
-          Write-Host "║    RDP Client > Local Resources > Remote Audio >              ║" -ForegroundColor Gray
-          Write-Host "║    Play on this computer                                      ║" -ForegroundColor Gray
-          Write-Host "║                                                               ║" -ForegroundColor Magenta
-          Write-Host "╠═══════════════════════════════════════════════════════════════╣" -ForegroundColor Cyan
-          Write-Host "║  ✨ OPTIMIZATIONS APPLIED                                     ║" -ForegroundColor Green
-          Write-Host "║  ✓ CPU High Performance  ✓ Memory Optimization                ║" -ForegroundColor Gray
-          Write-Host "║  ✓ Network Stack Tuned  ✓ GPU Acceleration                    ║" -ForegroundColor Gray
-          Write-Host "║  ✓ ReFS Storage          ✓ Multi-Monitor Support              ║" -ForegroundColor Gray
-          Write-Host "║  ✓ TCP Window Scaling   ✓ UDP Transport                       ║" -ForegroundColor Gray
-          Write-Host "║  ✓ Jumbo Frames         ✓ QoS Priority Rules                  ║" -ForegroundColor Gray
-          Write-Host "║                                                               ║" -ForegroundColor Green
-          Write-Host "╚═══════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
+          Write-Host "║  ⚙️  Mode:           $env:PERF_MODE" -ForegroundColor Cyan
+          Write-Host "║                                                                ║" -ForegroundColor Cyan
+          Write-Host "╠════════════════════════════════════════════════════════════════╣" -ForegroundColor Cyan
+          Write-Host "║  📢 AUDIO SETUP                                                ║" -ForegroundColor Magenta
+          Write-Host "║  RDP Client > Local Resources > Remote Audio >                 ║" -ForegroundColor Gray
+          Write-Host "║  Play on this computer                                         ║" -ForegroundColor Gray
+          Write-Host "║                                                                ║" -ForegroundColor Magenta
+          Write-Host "╠════════════════════════════════════════════════════════════════╣" -ForegroundColor Cyan
+          Write-Host "║  ✨ OPTIMIZATIONS APPLIED                                      ║" -ForegroundColor Green
+          Write-Host "║  ✓ CPU Performance      ✓ Memory Optimization                  ║" -ForegroundColor Gray
+          Write-Host "║  ✓ Network Stack       ✓ GPU Acceleration                      ║" -ForegroundColor Gray
+          Write-Host "║  ✓ Jumbo Frames        ✓ TCP Offloading                        ║" -ForegroundColor Gray
+          Write-Host "║  ✓ QoS Priority        ✓ Multi-Monitor                         ║" -ForegroundColor Gray
+          Write-Host "║                                                                ║" -ForegroundColor Green
+          Write-Host "╚════════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
+          Write-Host "`n" -ForegroundColor White
 
-      - name: "⏳ Advanced System Monitor & Keep-Alive"
-        run:  |
-          Write-Host "`n⏳ Starting advanced monitoring system..." -ForegroundColor Green
+      - name: "⏳ System Monitor & Keep-Alive"
+        run: |
+          Write-Host "`n⏳ Starting monitoring..." -ForegroundColor Green
           
           $sessionActive = $true
           $checkInterval = 300
-          $alertThreshold = 85
           $failureCount = 0
-          $maxFailures = 3
           
           while ($sessionActive) {
               try {
@@ -616,12 +441,12 @@ jobs:
                   
                   $tsStatus = & "$env:ProgramFiles\Tailscale\tailscale.exe" status 2>$null | Select-Object -First 1
                   if ($tsStatus -match "Connected") {
-                      Write-Host "[$timestamp] ✅ Tailscale:  Connected" -ForegroundColor Green
+                      Write-Host "[$timestamp] ✅ Tailscale Connected" -ForegroundColor Green
                       $failureCount = 0
                   } else {
                       $failureCount++
-                      Write-Host "[$timestamp] ⚠️  Tailscale: Disconnected ($failureCount/$maxFailures)" -ForegroundColor Yellow
-                      if ($failureCount -ge $maxFailures) {
+                      Write-Host "[$timestamp] ⚠ Tailscale Disconnected ($failureCount/3)" -ForegroundColor Yellow
+                      if ($failureCount -ge 3) {
                           & "$env:ProgramFiles\Tailscale\tailscale. exe" up --accept-routes --accept-dns=false
                           $failureCount = 0
                       }
@@ -632,11 +457,7 @@ jobs:
                   $freeMem = (Get-WmiObject -Class Win32_OperatingSystem).FreePhysicalMemory / 1MB / 1024
                   $memUsage = [math]::Round((($totalMem - $freeMem) / $totalMem) * 100)
                   
-                  Write-Host "[$timestamp] 📊 CPU: ${cpuUsage}% | RAM: ${memUsage}% | Free: ${freeMem}GB" -ForegroundColor Cyan
-                  
-                  if ($cpuUsage -gt $alertThreshold -or $memUsage -gt $alertThreshold) {
-                      Write-Host "[$timestamp] ⚠️  HIGH RESOURCE USAGE!" -ForegroundColor Red
-                  }
+                  Write-Host "[$timestamp] CPU: $([math]::Round($cpuUsage))% | RAM: $memUsage% | Free: $([math]::Round($freeMem))GB" -ForegroundColor Cyan
                   
                   $rdpService = Get-Service -Name TermService -ErrorAction SilentlyContinue
                   if ($rdpService. Status -ne "Running") {
@@ -645,7 +466,7 @@ jobs:
                   
                   Start-Sleep -Seconds $checkInterval
               } catch {
-                  Write-Host "[$timestamp] ❌ Error:  $_" -ForegroundColor Red
+                  Write-Host "[$timestamp] Error:  $_" -ForegroundColor Red
                   Start-Sleep -Seconds 60
               }
           }
