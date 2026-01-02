@@ -159,10 +159,14 @@ jobs:
           try {
             $password = -join ((48..57) + (65..90) + (97..122) | Get-Random -Count 16 | ForEach-Object {[char]$_})
             
-            Get-LocalUser -Name "RDP" -ErrorAction SilentlyContinue | Remove-LocalUser -Force -ErrorAction SilentlyContinue
+            # Đã sửa: Xóa bỏ -Force vì Remove-LocalUser không hỗ trợ
+            Get-LocalUser -Name "RDP" -ErrorAction SilentlyContinue | Remove-LocalUser -ErrorAction SilentlyContinue
             
             $securePass = ConvertTo-SecureString $password -AsPlainText -Force
-            New-LocalUser -Name "RDP" -Password $securePass -AccountNeverExpires -PasswordNeverExpires: $true
+            
+            # Đã sửa: Thêm lại tham số -Password và bỏ các ký tự lạ
+            New-LocalUser -Name "RDP" -Password $securePass -AccountNeverExpires -PasswordNeverExpires
+            
             Add-LocalGroupMember -Group "Administrators" -Member "RDP"
             Add-LocalGroupMember -Group "Remote Desktop Users" -Member "RDP"
             
