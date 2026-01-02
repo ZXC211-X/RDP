@@ -150,30 +150,7 @@ jobs:
           Clear-DnsClientCache -ErrorAction SilentlyContinue
           Write-Host "  ✓ DNS Cache cleared" -ForegroundColor Green
 
-      - name: "🌐 QoS Configuration"
-        run: |
-          Write-Host "`n🌐 QoS Setup..." -ForegroundColor Cyan
-          
-          Get-NetQosPolicy -ErrorAction SilentlyContinue | Remove-NetQosPolicy -Confirm:$false -ErrorAction SilentlyContinue
-          New-NetQosPolicy -Name "RDP-Priority" -IPProtocol TCP -IPPort 3389 -PolicyStore ActiveStore -Precedence 1 -ThrottleRateActionBitsPerSecond 0 -ErrorAction SilentlyContinue
-          New-NetQosPolicy -Name "Audio-Priority" -IPProtocol UDP -IPPort 1194-1300 -PolicyStore ActiveStore -Precedence 2 -ThrottleRateActionBitsPerSecond 0 -ErrorAction SilentlyContinue
-          
-          Write-Host "  ✓ QoS configured" -ForegroundColor Green
-
-      - name: "🎮 GPU Acceleration"
-        run: |
-          Write-Host "`n🎮 GPU Acceleration Setup..." -ForegroundColor Magenta
-          
-          $gpuPath = 'HKLM:\SYSTEM\CurrentControlSet\Control\GraphicsDrivers'
-          if (-not (Test-Path $gpuPath)) { New-Item -Path $gpuPath -Force | Out-Null }
-          
-          Set-ItemProperty -Path $gpuPath -Name "HwSchMode" -Value 2 -Force
-          
-          $watchdogPath = "$gpuPath\Watchdog"
-          if (-not (Test-Path $watchdogPath)) { New-Item -Path $watchdogPath -Force | Out-Null }
-          Set-ItemProperty -Path $watchdogPath -Name "Level" -Value 0 -Force
-          
-          Write-Host "  ✓ GPU acceleration enabled" -ForegroundColor Green
+     
 
       - name: "👤 Create RDP User"
         run: |
@@ -226,6 +203,47 @@ jobs:
             Write-Host "  ⚠️ Storage:  Could not create VHD (Likely insufficient space or permission)" -ForegroundColor Yellow
             Write-Host "  Error: $_" -ForegroundColor Red
           }
+
+      - name: "🌐 QoS Configuration"
+        run:  |
+          Write-Host "`n🌐 QoS Setup..." -ForegroundColor Cyan
+          
+          try {
+              Get-NetQosPolicy -ErrorAction SilentlyContinue | Remove-NetQosPolicy -Confirm:$false -ErrorAction SilentlyContinue
+              
+              New-NetQosPolicy -Name "RDP-Priority" -IPProtocol TCP -IPPort 3389 -PolicyStore ActiveStore -Precedence 1 -ThrottleRateActionBitsPerSecond 0 -ErrorAction SilentlyContinue
+              New-NetQosPolicy -Name "Audio-Priority" -IPProtocol UDP -IPPort 1194-1300 -PolicyStore ActiveStore -Precedence 2 -ThrottleRateActionBitsPerSecond 0 -ErrorAction SilentlyContinue
+              
+              Write-Host "  ✓ QoS policies created" -ForegroundColor Green
+          } catch {
+              Write-Host "  ⚠ QoS policies (non-critical)" -ForegroundColor Yellow
+          }
+      - name: "🎮 GPU Acceleration Setup"
+        run: |
+          Write-Host "`n🎮 GPU Acceleration Setup..." -ForegroundColor Magenta
+          
+          try {
+              $gpuPath = 'HKLM:\SYSTEM\CurrentControlSet\Control\GraphicsDrivers'
+              
+              if (-not (Test-Path $gpuPath)) {
+                  New-Item -Path $gpuPath -Force | Out-Null
+              }
+              
+              Set-ItemProperty -Path $gpuPath -Name "HwSchMode" -Value 2 -Force
+              
+              $watchdogPath = "$gpuPath\Watchdog"
+              if (-not (Test-Path $watchdogPath)) {
+                  New-Item -Path $watchdogPath -Force | Out-Null
+              }
+              Set-ItemProperty -Path $watchdogPath -Name "Level" -Value 0 -Force
+              
+              Set-ItemProperty -Path $gpuPath -Name "EnableMiracast" -Value 2 -Force
+              
+              Write-Host "  ✓ GPU acceleration enabled" -ForegroundColor Green
+          } catch {
+              Write-Host "  ⚠ GPU optimization (non-critical)" -ForegroundColor Yellow
+          }
+
 
       - name: "🔧 Configure RDP"
         run: |
