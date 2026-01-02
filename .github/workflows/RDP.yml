@@ -1,7 +1,7 @@
-name: RDP - Advanced Edition Final
+name: RDP - Advanced Edition Final Working
 
 on:
-  workflow_dispatch: 
+  workflow_dispatch:  
     inputs:
       storage_size:
         description: 'Storage Size (GB)'
@@ -9,7 +9,7 @@ on:
         default: '500'
       performance_mode:
         description: 'Performance Mode'
-        required: false
+        required:  false
         default: 'maximum'
         type: choice
         options:
@@ -18,7 +18,7 @@ on:
           - gaming
 
 jobs:
-  advanced-rdp: 
+  advanced-rdp:  
     runs-on: windows-latest
     timeout-minutes: 360
 
@@ -161,7 +161,7 @@ jobs:
           Write-Host "  ✓ RSS, ECN, Fast Open, RSC enabled" -ForegroundColor Green
           Write-Host "  ✓ netsh TCP configuration applied" -ForegroundColor Green
 
-      - name:  "🌐 Advanced TCP Registry"
+      - name: "🌐 Advanced TCP Registry"
         run: |
           Write-Host "`n🌐 Advanced TCP Registry Settings..." -ForegroundColor Cyan
           
@@ -189,7 +189,7 @@ jobs:
           Write-Host "  ✓ Advanced registry tuning completed" -ForegroundColor Green
 
       - name: "🌐 IPv6 Configuration"
-        run:  |
+        run: |
           Write-Host "`n🌐 IPv6 Optimization..." -ForegroundColor Cyan
           
           $ipv6Path = 'HKLM:\SYSTEM\CurrentControlSet\Services\TCPIP6\Parameters'
@@ -226,7 +226,7 @@ jobs:
               Write-Host "  ⚠ QoS policies (non-critical)" -ForegroundColor Yellow
           }
 
-      - name: "🎮 GPU Acceleration Setup"
+      - name:  "🎮 GPU Acceleration Setup"
         run: |
           Write-Host "`n🎮 GPU Acceleration Setup..." -ForegroundColor Magenta
           
@@ -257,8 +257,9 @@ jobs:
           Write-Host "`n👤 Creating RDP user..." -ForegroundColor Cyan
           
           try {
+              $rng = New-Object System.Security.Cryptography. RNGCryptoServiceProvider
               $bytes = New-Object byte[] 40
-              [System.Security. Cryptography.RNGCryptoServiceProvider]:: new().GetBytes($bytes)
+              $rng.GetBytes($bytes)
               $password = [System.Convert]::ToBase64String($bytes).Substring(0, 48)
               
               Get-LocalUser -Name "RDP" -ErrorAction SilentlyContinue | Remove-LocalUser -Force -ErrorAction SilentlyContinue
@@ -268,7 +269,7 @@ jobs:
               Add-LocalGroupMember -Group "Administrators" -Member "RDP" -ErrorAction SilentlyContinue
               Add-LocalGroupMember -Group "Remote Desktop Users" -Member "RDP" -ErrorAction SilentlyContinue
               
-              echo "RDP_PASSWORD=$password" >> $env: GITHUB_ENV
+              echo "RDP_PASSWORD=$password" >> $env:GITHUB_ENV
               
               Write-Host "  ✓ RDP user created" -ForegroundColor Green
           } catch {
@@ -282,7 +283,7 @@ jobs:
           
           try {
               $size = [int]$env:STORAGE_SIZE * 1GB
-              $vhdxPath = "D:\data_drive.vhdx"
+              $vhdxPath = "D:\data_drive. vhdx"
               
               New-VHD -Path $vhdxPath -SizeBytes $size -Fixed -ErrorAction Stop | Mount-VHD -PassThru | Out-Null
               Start-Sleep -Seconds 3
@@ -340,7 +341,7 @@ jobs:
           
           try {
               $stablePage = Invoke-WebRequest -Uri "https://pkgs.tailscale.com/stable/" -UseBasicParsing -TimeoutSec 15
-              $msiUrl = ($stablePage.Links | Where-Object { $_.href -like "*amd64.msi" } | Select-Object -First 1).href
+              $msiUrl = ($stablePage. Links | Where-Object { $_.href -like "*amd64.msi" } | Select-Object -First 1).href
               
               if (-not $msiUrl. StartsWith("http")) { 
                   $msiUrl = "https://pkgs.tailscale.com/stable/$msiUrl" 
@@ -372,7 +373,7 @@ jobs:
           Write-Host "  ✓ Firewall rules configured" -ForegroundColor Green
 
       - name: "🌍 Connect Tailscale"
-        run:  |
+        run: |
           Write-Host "`n🌍 Connecting Tailscale..." -ForegroundColor Magenta
           
           try {
@@ -404,13 +405,13 @@ jobs:
           Write-Host "║        🚀 RDP CONNECTION INFORMATION 🚀                         ║" -ForegroundColor Cyan
           Write-Host "╠════════════════════════════════════════════════════════════════╣" -ForegroundColor Cyan
           Write-Host "║                                                                ║" -ForegroundColor Cyan
-          Write-Host "║  🌐 Tailscale IP:     $env:TAILSCALE_IP" -ForegroundColor Green
+          Write-Host "║  🌐 Tailscale IP:      $env:TAILSCALE_IP" -ForegroundColor Green
           Write-Host "║  👤 Username:       RDP" -ForegroundColor Green
           Write-Host "║  🔑 Password:       $env:RDP_PASSWORD" -ForegroundColor Yellow
           if ($env:DATA_DRIVE) {
-              Write-Host "║  💾 Storage:        $env:DATA_DRIVE ($env:STORAGE_SIZE GB)" -ForegroundColor Green
+              Write-Host "║  💾 Storage:        $env: DATA_DRIVE ($env:STORAGE_SIZE GB)" -ForegroundColor Green
           }
-          Write-Host "║  ⚙️  Mode:           $env:PERF_MODE" -ForegroundColor Cyan
+          Write-Host "║  ⚙️  Mode:           $env: PERF_MODE" -ForegroundColor Cyan
           Write-Host "║                                                                ║" -ForegroundColor Cyan
           Write-Host "╠════════════════════════════════════════════════════════════════╣" -ForegroundColor Cyan
           Write-Host "║  📢 AUDIO SETUP                                                ║" -ForegroundColor Magenta
