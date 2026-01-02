@@ -1,15 +1,15 @@
 name: RDP - Advanced Edition Clean
 
 on:
-  workflow_dispatch:  
+  workflow_dispatch:
     inputs:
       storage_size:
         description: 'Storage Size (GB)'
         required: false
-        default: '500'
+        default: '50'
       performance_mode:
         description: 'Performance Mode'
-        required:  false
+        required: false
         default: 'maximum'
         type: choice
         options:
@@ -18,7 +18,7 @@ on:
           - gaming
 
 jobs:
-  advanced-rdp:  
+  advanced-rdp:
     runs-on: windows-latest
     timeout-minutes: 360
 
@@ -30,17 +30,17 @@ jobs:
           $disableServices = @("DiagTrack", "dmwappushservice", "HomeGroupListener", "HomeGroupProvider", "WSearch", "WMPNetworkSvc", "RemoteRegistry", "TabletInputService")
           
           foreach ($service in $disableServices) {
-              $svc = Get-Service -Name $service -ErrorAction SilentlyContinue
-              if ($svc) {
-                  Stop-Service -Name $service -Force -NoWait -ErrorAction SilentlyContinue
-                  Set-Service -Name $service -StartupType Disabled -ErrorAction SilentlyContinue
-              }
+            $svc = Get-Service -Name $service -ErrorAction SilentlyContinue
+            if ($svc) {
+              Stop-Service -Name $service -Force -NoWait -ErrorAction SilentlyContinue
+              Set-Service -Name $service -StartupType Disabled -ErrorAction SilentlyContinue
+            }
           }
           
           Write-Host "  ✓ Disabled $($disableServices.Count) services" -ForegroundColor Green
           
           echo "PERF_MODE=${{ github.event.inputs.performance_mode }}" >> $env:GITHUB_ENV
-          echo "STORAGE_SIZE=${{ github.event. inputs.storage_size }}" >> $env:GITHUB_ENV
+          echo "STORAGE_SIZE=${{ github.event.inputs.storage_size }}" >> $env:GITHUB_ENV
 
       - name: "⚡ CPU Performance Tuning"
         run: |
@@ -86,21 +86,21 @@ jobs:
           Write-Host "`n🌐 Optimizing Network Adapters..." -ForegroundColor Cyan
           
           $adapters = Get-NetAdapter -Physical -ErrorAction SilentlyContinue
-          if ($adapters. Count -gt 0) {
-              foreach ($adapter in $adapters) {
-                  $props = Get-NetAdapterAdvancedProperty -Name $adapter.Name -ErrorAction SilentlyContinue
-                  
-                  if ($props | Where-Object { $_. RegistryKeyword -eq '*JumboPacket' }) {
-                      Set-NetAdapterAdvancedProperty -Name $adapter.Name -RegistryKeyword "*JumboPacket" -RegistryValue 9014 -ErrorAction SilentlyContinue
-                  }
-                  if ($props | Where-Object { $_.RegistryKeyword -eq '*RscIPv4' }) {
-                      Set-NetAdapterAdvancedProperty -Name $adapter.Name -RegistryKeyword "*RscIPv4" -RegistryValue 1 -ErrorAction SilentlyContinue
-                  }
-                  if ($props | Where-Object { $_.RegistryKeyword -eq '*LsoV2IPv4' }) {
-                      Set-NetAdapterAdvancedProperty -Name $adapter.Name -RegistryKeyword "*LsoV2IPv4" -RegistryValue 1 -ErrorAction SilentlyContinue
-                  }
+          if ($adapters.Count -gt 0) {
+            foreach ($adapter in $adapters) {
+              $props = Get-NetAdapterAdvancedProperty -Name $adapter.Name -ErrorAction SilentlyContinue
+              
+              if ($props | Where-Object { $_.RegistryKeyword -eq '*JumboPacket' }) {
+                Set-NetAdapterAdvancedProperty -Name $adapter.Name -RegistryKeyword "*JumboPacket" -RegistryValue 9014 -ErrorAction SilentlyContinue
               }
-              Write-Host "  ✓ Network Adapters optimized" -ForegroundColor Green
+              if ($props | Where-Object { $_.RegistryKeyword -eq '*RscIPv4' }) {
+                Set-NetAdapterAdvancedProperty -Name $adapter.Name -RegistryKeyword "*RscIPv4" -RegistryValue 1 -ErrorAction SilentlyContinue
+              }
+              if ($props | Where-Object { $_.RegistryKeyword -eq '*LsoV2IPv4' }) {
+                Set-NetAdapterAdvancedProperty -Name $adapter.Name -RegistryKeyword "*LsoV2IPv4" -RegistryValue 1 -ErrorAction SilentlyContinue
+              }
+            }
+            Write-Host "  ✓ Network Adapters optimized" -ForegroundColor Green
           }
 
       - name: "🌐 netsh TCP Configuration"
@@ -180,46 +180,51 @@ jobs:
           Write-Host "`n👤 Creating RDP user..." -ForegroundColor Cyan
           
           try {
-              $password = -join ((48..57) + (65..90) + (97..122) | Get-Random -Count 48 | ForEach-Object {[char]$_})
-              
-              Get-LocalUser -Name "RDP" -ErrorAction SilentlyContinue | Remove-LocalUser -Force -ErrorAction SilentlyContinue
-              
-              $securePass = ConvertTo-SecureString $password -AsPlainText -Force
-              New-LocalUser -Name "RDP" -Password $securePass -AccountNeverExpires -PasswordNeverExpires: $true
-              Add-LocalGroupMember -Group "Administrators" -Member "RDP"
-              Add-LocalGroupMember -Group "Remote Desktop Users" -Member "RDP"
-              
-              echo "RDP_PASSWORD=$password" >> $env:GITHUB_ENV
-              Write-Host "  ✓ RDP user created" -ForegroundColor Green
+            $password = -join ((48..57) + (65..90) + (97..122) | Get-Random -Count 16 | ForEach-Object {[char]$_})
+            
+            Get-LocalUser -Name "RDP" -ErrorAction SilentlyContinue | Remove-LocalUser -Force -ErrorAction SilentlyContinue
+            
+            $securePass = ConvertTo-SecureString $password -AsPlainText -Force
+            New-LocalUser -Name "RDP" -Password $securePass -AccountNeverExpires -PasswordNeverExpires: $true
+            Add-LocalGroupMember -Group "Administrators" -Member "RDP"
+            Add-LocalGroupMember -Group "Remote Desktop Users" -Member "RDP"
+            
+            echo "RDP_PASSWORD=$password" >> $env:GITHUB_ENV
+            Write-Host "  ✓ RDP user created" -ForegroundColor Green
           } catch {
-              Write-Host "  ✗ RDP user failed:  $_" -ForegroundColor Red
-              exit 1
+            Write-Host "  ✗ RDP user failed:  $_" -ForegroundColor Red
+            exit 1
           }
 
-      - name: "🗂 Create Storage Drive"
+      - name: "📂 Create Storage Drive"
         run: |
-          Write-Host "`n🗂 Creating storage..." -ForegroundColor Yellow
+          Write-Host "`n📂 Creating storage..." -ForegroundColor Yellow
           
           try {
-              $size = [int]$env:STORAGE_SIZE * 1GB
-              $vhdxPath = "D:\data_drive.vhdx"
-              
-              New-VHD -Path $vhdxPath -SizeBytes $size -Fixed | Mount-VHD -PassThru | Out-Null
-              Start-Sleep -Seconds 3
-              
-              $rawDisk = Get-Disk | Where-Object PartitionStyle -eq 'RAW' | Select-Object -First 1
-              if ($rawDisk) {
-                  $disk = $rawDisk | Initialize-Disk -PartitionStyle GPT -PassThru
-                  $partition = $disk | New-Partition -AssignDriveLetter -UseMaximumSize
-                  $partition | Format-Volume -FileSystem ReFS -NewFileSystemLabel "DataDrive" -Confirm:$false -Force | Out-Null
-                  
-                  $driveLetter = $partition.DriveLetter
-                  echo "DATA_DRIVE=${driveLetter}:" >> $env:GITHUB_ENV
-                  
-                  Write-Host "  ✓ Storage:  ${driveLetter}:  ($env:STORAGE_SIZE GB ReFS)" -ForegroundColor Green
-              }
+            $size = [int]$env:STORAGE_SIZE * 1GB
+            if ($size -lt 1GB) { $size = 50GB }
+            
+            # Use temp drive D: which usually has ~14GB free, or C: if small
+            # Github Actions free runners have limited space.
+            $vhdxPath = "C:\data_drive.vhdx"
+            
+            New-VHD -Path $vhdxPath -SizeBytes $size -Dynamic -ErrorAction SilentlyContinue | Out-Null
+            $vhd = Mount-VHD -Path $vhdxPath -PassThru
+            
+            Start-Sleep -Seconds 3
+            
+            $disk = $vhd | Get-Disk
+            $disk | Initialize-Disk -PartitionStyle GPT -PassThru | Out-Null
+            $partition = $disk | New-Partition -AssignDriveLetter -UseMaximumSize
+            $partition | Format-Volume -FileSystem NTFS -NewFileSystemLabel "DataDrive" -Confirm:$false -Force | Out-Null
+            
+            $driveLetter = $partition.DriveLetter
+            echo "DATA_DRIVE=${driveLetter}:" >> $env:GITHUB_ENV
+            
+            Write-Host "  ✓ Storage:  ${driveLetter}:  ($env:STORAGE_SIZE GB)" -ForegroundColor Green
           } catch {
-              Write-Host "  ⚠ Storage:  Non-critical" -ForegroundColor Yellow
+            Write-Host "  ⚠️ Storage:  Could not create VHD (Likely insufficient space or permission)" -ForegroundColor Yellow
+            Write-Host "  Error: $_" -ForegroundColor Red
           }
 
       - name: "🔧 Configure RDP"
@@ -248,19 +253,20 @@ jobs:
           Write-Host "`n🔌 Installing Tailscale..." -ForegroundColor Magenta
           
           try {
-              $stablePage = Invoke-WebRequest -Uri "https://pkgs.tailscale.com/stable/" -UseBasicParsing -TimeoutSec 15
-              $msiUrl = ($stablePage.Links | Where-Object { $_.href -like "*amd64.msi" } | Select-Object -First 1).href
-              if (-not $msiUrl. StartsWith("http")) { $msiUrl = "https://pkgs.tailscale.com/stable/$msiUrl" }
-              
-              $installerPath = "$env:TEMP\tailscale. msi"
-              Invoke-WebRequest -Uri $msiUrl -OutFile $installerPath -TimeoutSec 30
-              Start-Process msiexec. exe -ArgumentList "/i","$installerPath","/quiet","/norestart" -Wait
-              Remove-Item $installerPath -Force
-              
-              Write-Host "  ✓ Tailscale installed" -ForegroundColor Green
+            $stablePage = Invoke-WebRequest -Uri "https://pkgs.tailscale.com/stable/" -UseBasicParsing -TimeoutSec 15
+            $msiUrl = ($stablePage.Links | Where-Object { $_.href -like "*amd64.msi" } | Select-Object -First 1).href
+            if (-not $msiUrl.StartsWith("http")) { $msiUrl = "https://pkgs.tailscale.com/stable/$msiUrl" }
+            
+            $installerPath = "$env:TEMP\tailscale.msi"
+            Invoke-WebRequest -Uri $msiUrl -OutFile $installerPath -TimeoutSec 120
+            
+            Start-Process msiexec.exe -ArgumentList "/i", "$installerPath", "/quiet", "/norestart" -Wait
+            Remove-Item $installerPath -Force
+            
+            Write-Host "  ✓ Tailscale installed" -ForegroundColor Green
           } catch {
-              Write-Host "  ✗ Tailscale failed:  $_" -ForegroundColor Red
-              exit 1
+            Write-Host "  ✗ Tailscale failed:  $_" -ForegroundColor Red
+            exit 1
           }
 
       - name: "🔒 Configure Firewall"
@@ -280,43 +286,43 @@ jobs:
           Write-Host "`n🌍 Connecting Tailscale..." -ForegroundColor Magenta
           
           try {
-              & "$env:ProgramFiles\Tailscale\tailscale.exe" up --authkey=${{ secrets.TAILSCALE_AUTH_KEY }} --hostname=gh-rdp-${{ github.run_id }} --accept-routes --accept-dns=false --speed-test=false
-              
-              $retries = 0
-              $tsIP = $null
-              while ($retries -lt 25 -and -not $tsIP) {
-                  Start-Sleep -Seconds 2
-                  $tsIP = & "$env:ProgramFiles\Tailscale\tailscale. exe" ip -4 2>$null
-                  $retries++
-              }
-              
-              if (-not $tsIP) { throw "No Tailscale IP" }
-              echo "TAILSCALE_IP=$tsIP" >> $env:GITHUB_ENV
-              Write-Host "  ✓ Connected:  $tsIP" -ForegroundColor Green
+            & "$env:ProgramFiles\Tailscale\tailscale.exe" up --authkey=${{ secrets.TAILSCALE_AUTH_KEY }} --hostname=gh-rdp-${{ github.run_id }} --accept-routes --accept-dns=false
+            
+            $retries = 0
+            $tsIP = $null
+            while ($retries -lt 25 -and -not $tsIP) {
+              Start-Sleep -Seconds 2
+              $tsIP = & "$env:ProgramFiles\Tailscale\tailscale.exe" ip -4 2>$null
+              $retries++
+            }
+            
+            if (-not $tsIP) { throw "No Tailscale IP" }
+            echo "TAILSCALE_IP=$tsIP" >> $env:GITHUB_ENV
+            Write-Host "  ✓ Connected:  $tsIP" -ForegroundColor Green
           } catch {
-              Write-Host "  ✗ Tailscale failed: $_" -ForegroundColor Red
-              exit 1
+            Write-Host "  ✗ Tailscale failed: $_" -ForegroundColor Red
+            exit 1
           }
 
       - name: "📋 Display Connection Info"
         run: |
-          Write-Host "`n╔════════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
-          Write-Host "║        🚀 RDP CONNECTION INFORMATION 🚀                         ║" -ForegroundColor Cyan
-          Write-Host "╠════════════════════════════════════════════════════════════════╣" -ForegroundColor Cyan
-          Write-Host "║  🌐 IP:         $env:TAILSCALE_IP" -ForegroundColor Green
+          Write-Host "`n╔═══════════════════════════════════════════════╗" -ForegroundColor Cyan
+          Write-Host "║        🚀 RDP CONNECTION INFORMATION 🚀       ║" -ForegroundColor Cyan
+          Write-Host "╠═══════════════════════════════════════════════╣" -ForegroundColor Cyan
+          Write-Host "║  🌍 IP:        $env:TAILSCALE_IP" -ForegroundColor Green
           Write-Host "║  👤 User:      RDP" -ForegroundColor Green
           Write-Host "║  🔑 Pass:      $env:RDP_PASSWORD" -ForegroundColor Yellow
           if ($env:DATA_DRIVE) {
-              Write-Host "║  💾 Storage:   $env: DATA_DRIVE ($env:STORAGE_SIZE GB)" -ForegroundColor Green
+          Write-Host "║  💾 Storage:   $env:DATA_DRIVE ($env:STORAGE_SIZE GB)" -ForegroundColor Green
           }
           Write-Host "║  ⚙️  Mode:      $env:PERF_MODE" -ForegroundColor Cyan
           Write-Host "║" -ForegroundColor Cyan
-          Write-Host "║  📢 Audio Setup:" -ForegroundColor Magenta
+          Write-Host "║  📣 Audio Setup:" -ForegroundColor Magenta
           Write-Host "║  RDP > Local Resources > Remote Audio > Play on this computer" -ForegroundColor Gray
           Write-Host "║" -ForegroundColor Cyan
           Write-Host "║  ✨ Optimizations Applied:" -ForegroundColor Green
           Write-Host "║  ✓ CPU ✓ Memory ✓ Network ✓ GPU ✓ QoS ✓ Firewall" -ForegroundColor Gray
-          Write-Host "╚════════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
+          Write-Host "╚═══════════════════════════════════════════════╝" -ForegroundColor Cyan
 
       - name: "⏳ Monitor & Keep-Alive"
         run: |
@@ -324,19 +330,19 @@ jobs:
           
           $sessionActive = $true
           while ($sessionActive) {
-              try {
-                  $timestamp = Get-Date -Format "HH:mm:ss"
-                  $tsStatus = & "$env:ProgramFiles\Tailscale\tailscale.exe" status 2>$null | Select-Object -First 1
-                  if ($tsStatus -match "Connected") {
-                      $cpuUsage = (Get-WmiObject -Query "SELECT LoadPercentage FROM Win32_Processor" | Measure-Object -Property LoadPercentage -Average).Average
-                      Write-Host "[$timestamp] ✅ Connected | CPU: $([math]::Round($cpuUsage))%" -ForegroundColor Green
-                  } else {
-                      Write-Host "[$timestamp] ⚠ Reconnecting..." -ForegroundColor Yellow
-                      & "$env:ProgramFiles\Tailscale\tailscale. exe" up --accept-routes --accept-dns=false
-                  }
-                  Start-Sleep -Seconds 300
-              } catch {
-                  Write-Host "Error:  $_" -ForegroundColor Red
-                  Start-Sleep -Seconds 60
+            try {
+              $timestamp = Get-Date -Format "HH:mm:ss"
+              $tsStatus = & "$env:ProgramFiles\Tailscale\tailscale.exe" status 2>$null | Select-Object -First 1
+              if ($tsStatus -match "Connected") {
+                $cpuUsage = (Get-WmiObject -Query "SELECT LoadPercentage FROM Win32_Processor" | Measure-Object -Property LoadPercentage -Average).Average
+                Write-Host "[$timestamp] ✅ Connected | CPU: $([math]::Round($cpuUsage))%" -ForegroundColor Green
+              } else {
+                Write-Host "[$timestamp] ⚠️ Reconnecting..." -ForegroundColor Yellow
+                & "$env:ProgramFiles\Tailscale\tailscale.exe" up --accept-routes --accept-dns=false
               }
+              Start-Sleep -Seconds 60
+            } catch {
+              Write-Host "Error:  $_" -ForegroundColor Red
+              Start-Sleep -Seconds 60
+            }
           }
