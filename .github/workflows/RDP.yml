@@ -205,19 +205,16 @@ jobs:
           }
 
       - name: "🌐 QoS Configuration"
-        run:  |
+        run: |
           Write-Host "`n🌐 QoS Setup..." -ForegroundColor Cyan
           
-          try {
-              Get-NetQosPolicy -ErrorAction SilentlyContinue | Remove-NetQosPolicy -Confirm:$false -ErrorAction SilentlyContinue
-              
-              New-NetQosPolicy -Name "RDP-Priority" -IPProtocol TCP -IPPort 3389 -PolicyStore ActiveStore -Precedence 1 -ThrottleRateActionBitsPerSecond 0 -ErrorAction SilentlyContinue
-              New-NetQosPolicy -Name "Audio-Priority" -IPProtocol UDP -IPPort 1194-1300 -PolicyStore ActiveStore -Precedence 2 -ThrottleRateActionBitsPerSecond 0 -ErrorAction SilentlyContinue
-              
-              Write-Host "  ✓ QoS policies created" -ForegroundColor Green
-          } catch {
-              Write-Host "  ⚠ QoS policies (non-critical)" -ForegroundColor Yellow
-          }
+          Get-NetQosPolicy -ErrorAction SilentlyContinue | Remove-NetQosPolicy -Confirm:$false -ErrorAction SilentlyContinue
+          New-NetQosPolicy -Name "RDP-Priority" -IPProtocol TCP -IPPort 3389 -PolicyStore ActiveStore -Precedence 1 -ThrottleRateActionBitsPerSecond 0 -ErrorAction SilentlyContinue
+          
+          # Đã sửa lỗi range port tại đây: dùng (1194..1300) thay vì "1194-1300"
+          New-NetQosPolicy -Name "Audio-Priority" -IPProtocol UDP -IPPort (1194..1300) -PolicyStore ActiveStore -Precedence 2 -ThrottleRateActionBitsPerSecond 0 -ErrorAction SilentlyContinue
+          
+          Write-Host "  ✓ QoS configured" -ForegroundColor Green
       - name: "🎮 GPU Acceleration Setup"
         run: |
           Write-Host "`n🎮 GPU Acceleration Setup..." -ForegroundColor Magenta
