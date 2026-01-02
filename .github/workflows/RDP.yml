@@ -41,20 +41,6 @@ jobs:
           
           $driveLetter = (Get-Partition -DiskNumber (Get-Disk | Where-Object OperationalStatus -eq 'Online' | Select-Object -Last 1).Number | Select-Object -Last 1).DriveLetter
           echo "EXTRA_DRIVE=${driveLetter}:" >> $env:GITHUB_ENV
-
-      - name: Install Latest Android Studio 
-        run: |
-          $installerUrl = "https://redirector.gvt1.com/edgedl/android/studio/install/2025.2.2.7/android-studio-2025.2.2.7-windows.exe"
-          $installerPath = "$env:TEMP\android-studio.exe"
-          Invoke-WebRequest -Uri $installerUrl -OutFile $installerPath
-          
-          Start-Process $installerPath -ArgumentList "/S", "/D=D:\Android\AndroidStudio" -Wait
-          Remove-Item $installerPath -Force
-
-      - name: Install SDK Packages & Auto Accept Licenses
-        run: |
-          $sdkManager = "D:\Android\AndroidStudio\android\sdk\cmdline-tools\latest\bin\sdkmanager.bat"
-          $sdkRoot = "D:\Android\sdk"
           
       - name: Install Latest Tailscale
         run: |
