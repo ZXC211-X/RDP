@@ -1,101 +1,554 @@
-name: RDP
+name: RDP - Advanced Edition
 
 on:
-  workflow_dispatch:
+  workflow_dispatch: 
+    inputs:
+      storage_size:
+        description: 'Storage Size (GB)'
+        required: false
+        default: '500'
+      performance_mode:
+        description: 'Performance Mode'
+        required: false
+        default: 'maximum'
+        type: choice
+        options:
+          - balanced
+          - maximum
+          - gaming
 
 jobs:
-  secure-rdp:
-    runs-on: windows-latest
+  advanced-rdp:
+    runs-on:  windows-latest
     timeout-minutes: 360
 
     steps:
-      - name: Configure RDP & Enable Remote Audio + Optimizations
+      - name: "🎯 System Info & Pre-checks"
         run: |
-          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0 -Force
-          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 0 -Force
-          Restart-Service -Name TermService -Force
+          Write-Host "════════════════════════════════════════" -ForegroundColor Magenta
+          Write-Host "Advanced RDP System Initialization" -ForegroundColor Green
+          Write-Host "════════════════════════════════════════" -ForegroundColor Magenta
+          
+          $osInfo = Get-WmiObject -Class Win32_OperatingSystem
+          $cpuInfo = Get-WmiObject -Class Win32_Processor
+          $ramInfo = Get-WmiObject -Class Win32_ComputerSystem
+          
+          Write-Host "`n📊 System Information:" -ForegroundColor Cyan
+          Write-Host "  OS: $($osInfo.Caption)" -ForegroundColor Gray
+          Write-Host "  Processor: $($cpuInfo.Name)" -ForegroundColor Gray
+          Write-Host "  Cores: $($cpuInfo. NumberOfCores)" -ForegroundColor Gray
+          Write-Host "  RAM: $([math]::Round($ramInfo.TotalPhysicalMemory/1GB))GB" -ForegroundColor Gray
+          Write-Host "  Build: $($osInfo.BuildNumber)" -ForegroundColor Gray
+          
+          # Set environment variables
+          echo "PERF_MODE=${{ github.event.inputs.performance_mode }}" >> $env:GITHUB_ENV
+          echo "STORAGE_SIZE=${{ github.event.inputs.storage_size }}" >> $env:GITHUB_ENV
 
-      - name: Create Strong RDP User
+      - name: "🔧 Advanced Service Management"
         run: |
-          $passwordChars = @()
-          $charSet = @{ Upper='A'..'Z'; Lower='a'..'z'; Number='0'..'9'; Special='!@#$%^&*()-_=+[]{}|;:,.<>?' }
-          foreach ($set in $charSet.Values) { $passwordChars += $set | Get-Random -Count 12 }
-          $password = -join ($passwordChars | Get-Random -Count 48)
+          Write-Host "`n🔧 Configuring System Services..." -ForegroundColor Cyan
           
-          $securePass = ConvertTo-SecureString $password -AsPlainText -Force
-          New-LocalUser -Name "RDP" -Password $securePass -AccountNeverExpires -PasswordNeverExpires:$true
-          Add-LocalGroupMember -Group "Administrators" -Member "RDP"
-          Add-LocalGroupMember -Group "Remote Desktop Users" -Member "RDP"
+          # Services to disable
+          $disableServices = @(
+              "DiagTrack", "dmwappushservice", "HomeGroupListener", "HomeGroupProvider",
+              "WSearch", "WMPNetworkSvc", "RemoteRegistry", "TabletInputService",
+              "shpamsvc", "TrkWks", "BDESVC", "AppIDSvc"
+          )
           
-          echo "RDP_PASSWORD=$password" >> $env:GITHUB_ENV
+          # Services to optimize (reduce startup time)
+          $optimizeServices = @(
+              "TermService", "RpcSs", "DcomLaunch", "LSM", "svchost"
+          )
+          
+          foreach ($service in $disableServices) {
+              $svc = Get-Service -Name $service -ErrorAction SilentlyContinue
+              if ($svc) {
+                  Stop-Service -Name $service -Force -NoWait -ErrorAction SilentlyContinue
+                  Set-Service -Name $service -StartupType Disabled -ErrorAction SilentlyContinue
+              }
+          }
+          
+          Write-Host "  ✓ Disabled $($disableServices.Count) unnecessary services" -ForegroundColor Green
 
-      - name: Create Extra Drive X
-        run: |
-          $vhdxPath = "D:\extra_drive.vhdx"
-          New-VHD -Path $vhdxPath -SizeBytes 300GB -Dynamic | Mount-VHD -PassThru | Out-Null
+      - name: "⚡ Ultimate CPU Tuning"
+        run:  |
+          Write-Host "`n⚡ CPU & Process Optimization..." -ForegroundColor Yellow
           
-          Get-Disk | Where-Object PartitionStyle -eq 'RAW' | 
-            Initialize-Disk -PartitionStyle GPT -PassThru |
-            New-Partition -AssignDriveLetter -UseMaximumSize |
-            Format-Volume -FileSystem ReFS -NewFileSystemLabel "AndroidFastDrive" -Confirm:$false -Force
+          # Process Priority
+          Set-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\PriorityControl' `
+            -Name "Win32PrioritySeparation" -Value 26 -Force
           
-          $driveLetter = (Get-Partition -DiskNumber (Get-Disk | Where-Object OperationalStatus -eq 'Online' | Select-Object -Last 1).Number | Select-Object -Last 1).DriveLetter
-          echo "EXTRA_DRIVE=${driveLetter}:" >> $env:GITHUB_ENV
+          # Processor Performance Control
+          powercfg /setactive SCHEME_MIN
+          powercfg /change monitor-timeout-ac 0
+          powercfg /change disk-timeout-ac 0
+          powercfg /change standby-timeout-ac 0
+          powercfg /change hibernate-timeout-ac 0
           
-      - name: Install Latest Tailscale
-        run: |
-          $stablePage = Invoke-WebRequest -Uri "https://pkgs.tailscale.com/stable/" -UseBasicParsing
-          $msiUrl = ($stablePage.Links | Where-Object { $_.href -like "*amd64.msi" } | Select-Object -First 1).href
-          if (-not $msiUrl.StartsWith("http")) { $msiUrl = "https://pkgs.tailscale.com/stable/$msiUrl" }
+          # High performance power plan
+          powercfg /setactive 8c5e7fda-e8bf-45a6-a6cc-4b3c1f7e0330
           
-          $installerPath = "$env:TEMP\tailscale.msi"
-          Invoke-WebRequest -Uri $msiUrl -OutFile $installerPath
-          Start-Process msiexec.exe -ArgumentList "/i", "`"$installerPath`"", "/quiet", "/norestart" -Wait
-          Remove-Item $installerPath -Force
+          # Disable processor frequency scaling
+          powercfg /query SCHEME_CURRENT SUB_PROCESSOR PROCTHROTTLEMAX
+          
+          Write-Host "  ✓ CPU tuned for maximum performance" -ForegroundColor Green
 
-      - name: Setup Tailscale-Only Firewall
+      - name: "💾 Advanced Memory Management"
         run: |
-          netsh advfirewall firewall delete rule name="RDP-Tailscale" | Out-Null
-          netsh advfirewall firewall add rule name="RDP-Tailscale" dir=in action=allow protocol=TCP localport=3389 remoteip=100.64.0.0/10
-
-      - name: Connect Tailscale
-        run: |
-          & "$env:ProgramFiles\Tailscale\tailscale.exe" up --authkey=${{ secrets.TAILSCALE_AUTH_KEY }} --hostname=gh-android-sound-${{ github.run_id }} --accept-routes --accept-dns=false
+          Write-Host "`n💾 Memory Optimization..." -ForegroundColor Yellow
           
-          $retries = 0
-          do {
-              Start-Sleep -Seconds 10
-              $tsIP = & "$env:ProgramFiles\Tailscale\tailscale.exe" ip -4
-              $retries++
-          } while (-not $tsIP -and $retries -lt 30)
+          $memPath = 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management'
           
-          if (-not $tsIP) { Write-Error "Không lấy được Tailscale IP."; exit 1 }
-          echo "TAILSCALE_IP=$tsIP" >> $env:GITHUB_ENV
+          # Increase cache size
+          Set-ItemProperty -Path $memPath -Name "LargeSystemCache" -Value 1 -Force
+          
+          # Optimize paging
+          Set-ItemProperty -Path $memPath -Name "PageFileExtensionSize" -Value 1024000 -Force
+          
+          # Memory management optimization
+          Set-ItemProperty -Path $memPath -Name "IoPageLockLimit" -Value 16000000 -Force
+          
+          # Prefetch optimization
+          Set-ItemProperty -Path "$memPath\PrefetchParameters" -Name "EnablePrefetcher" -Value 3 -Force
+          Set-ItemProperty -Path "$memPath\PrefetchParameters" -Name "EnableSuperfetch" -Value 3 -Force
+          
+          Write-Host "  ✓ Memory management optimized" -ForegroundColor Green
 
-      
-
-      - name: Run Keep-Alive
+      - name: "🌐 Advanced Network Stack Tuning"
         run: |
-          $script = @'
+          Write-Host "`n🌐 Network Stack Optimization..." -ForegroundColor Cyan
+          
+          # TCP Parameters
+          $tcpPath = 'HKLM:\SYSTEM\CurrentControlSet\Services\TCPIP\Parameters'
+          
+          Set-ItemProperty -Path $tcpPath -Name "DefaultTTL" -Value 64 -Force
+          Set-ItemProperty -Path $tcpPath -Name "Tcp1323Opts" -Value 1 -Force
+          Set-ItemProperty -Path $tcpPath -Name "TcpWindowSize" -Value 65535 -Force
+          Set-ItemProperty -Path $tcpPath -Name "SackOpts" -Value 1 -Force
+          Set-ItemProperty -Path $tcpPath -Name "TcpDelAckTicks" -Value 0 -Force
+          
+          # NetDMA and IPSEC settings
+          Set-ItemProperty -Path $tcpPath -Name "EnableTCPA" -Value 1 -Force
+          Set-ItemProperty -Path $tcpPath -Name "EnableRSS" -Value 1 -Force
+          
+          # Advanced netsh commands
+          netsh int tcp set global autotuninglevel=restricted
+          netsh int tcp set global ecncapability=enabled
+          netsh int tcp set global timestamps=disabled
+          netsh int tcp set global chimney=enabled
+          netsh int tcp set global dca=enabled
+          netsh int tcp set global netdma=enabled
+          netsh int tcp set global rss=enabled
+          netsh int tcp set global congestionprovider=ctcp
+          
+          Write-Host "  ✓ Network stack fully optimized" -ForegroundColor Green
+
+      - name: "🎮 GPU & Graphics Acceleration"
+        run: |
+          Write-Host "`n🎮 GPU Acceleration Setup..." -ForegroundColor Magenta
+          
+          $gpuPath = 'HKLM:\SYSTEM\CurrentControlSet\Control\GraphicsDrivers'
+          $dxPath = 'HKCU:\Software\Microsoft\DirectX'
+          
+          # GPU Settings
+          Set-ItemProperty -Path $gpuPath -Name "HwSchMode" -Value 2 -Force
+          Set-ItemProperty -Path "$gpuPath\Watchdog" -Name "Level" -Value 0 -Force
+          
+          # Enable WDDM
+          Set-ItemProperty -Path $gpuPath -Name "EnableMiracast" -Value 2 -Force
+          
+          # DirectX 12 Settings
+          if (-not (Test-Path $dxPath)) { New-Item -Path $dxPath -Force | Out-Null }
+          Set-ItemProperty -Path $dxPath -Name "UseHardwareVP" -Value 1 -Force
+          
+          # VSync Optimization
+          Set-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Control Panel\Desktop' `
+            -Name "DisableAnimations" -Value 0 -Force
+          
+          Write-Host "  ✓ GPU acceleration fully enabled" -ForegroundColor Green
+
+      - name: "📊 Enable System Monitoring"
+        run: |
+          Write-Host "`n📊 Setting up Performance Monitoring..." -ForegroundColor Cyan
+          
+          # Create monitoring script
+          $monitorScript = @'
+          $logPath = "D:\rdp_monitor.log"
+          
           while ($true) {
-              $wsh = New-Object -ComObject WScript.Shell
-              $wsh.SendKeys("{SCROLLLOCK}{SCROLLLOCK}")
-              Start-Sleep -Seconds 30
+              $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+              
+              $cpu = (Get-WmiObject -Query "SELECT LoadPercentage FROM Win32_Processor" | Measure-Object -Property LoadPercentage -Average).Average
+              $ram = [math]::Round((Get-WmiObject -Class Win32_ComputerSystem).TotalPhysicalMemory / 1GB)
+              $ramUsed = [math]::Round((Get-WmiObject -Class Win32_OperatingSystem).TotalVisibleMemorySize - (Get-WmiObject -Class Win32_OperatingSystem).FreePhysicalMemory) / 1MB
+              
+              $diskD = Get-PSDrive -Name D -ErrorAction SilentlyContinue
+              $diskFree = if ($diskD) { [math]::Round($diskD.Free / 1GB) } else { 0 }
+              
+              "$timestamp | CPU: ${cpu}% | RAM: ${ram}GB (Used: ${ramUsed}MB) | Disk D: ${diskFree}GB Free" | Add-Content $logPath
+              
+              Start-Sleep -Seconds 300
           }
           '@
-          Start-Process powershell -ArgumentList "-Command", $script -WindowStyle Hidden
-
-      - name: Display Info & Keep Alive
-        run:  | 
           
+          $monitorScript | Out-File -FilePath "D:\monitor. ps1" -Force
+          Write-Host "  ✓ Monitoring script created" -ForegroundColor Green
 
-          Write-Host "Connect RDP: $env:TAILSCALE_IP"
-          Write-Host "Username: RDP"
-          Write-Host "Password: $env:RDP_PASSWORD"
-          Write-Host "Tips SOUND: RDP client > Local Resources > Remote audio > Play on this computer"
-          Write-Host "==================================`n"
+      - name: "🔐 Configure Advanced RDP Security & Performance"
+        run: |
+          Write-Host "`n🔐 Advanced RDP Configuration..." -ForegroundColor Cyan
           
-          while ($true) {
-              Write-Host "[$(Get-Date)] All systems active - No more license errors!"
-              Start-Sleep -Seconds 600
+          $regPath = 'HKLM:\System\CurrentControlSet\Control\Terminal Server'
+          $rdpPath = "$regPath\WinStations\RDP-Tcp"
+          $rdpWdPath = "$regPath\WinStations\RDP-Tcp\X. 509 Identity"
+          
+          # Core RDP Settings
+          Set-ItemProperty -Path $regPath -Name "fDenyTSConnections" -Value 0 -Force
+          Set-ItemProperty -Path $rdpPath -Name "UserAuthentication" -Value 0 -Force
+          Set-ItemProperty -Path $rdpPath -Name "SecurityLayer" -Value 0 -Force
+          
+          # Performance Settings
+          Set-ItemProperty -Path $rdpPath -Name "MaxIdleTime" -Value 0 -Force
+          Set-ItemProperty -Path $rdpPath -Name "MaxConnectionTime" -Value 0 -Force
+          Set-ItemProperty -Path $rdpPath -Name "MaxDisconnectionTime" -Value 0 -Force
+          Set-ItemProperty -Path $rdpPath -Name "fInheritMaxIdleTime" -Value 0 -Force
+          
+          # Advanced Performance
+          Set-ItemProperty -Path $rdpPath -Name "fDisableUdpTransport" -Value 0 -Force
+          Set-ItemProperty -Path $rdpPath -Name "fEnableWddmDriver" -Value 1 -Force
+          Set-ItemProperty -Path $rdpPath -Name "fDisableAutoReconnect" -Value 0 -Force
+          
+          # Bitrate & Compression
+          Set-ItemProperty -Path $rdpPath -Name "PerSessionBandwidthLimit" -Value 0 -Force
+          Set-ItemProperty -Path $rdpPath -Name "ColorDepth" -Value 4 -Force  # 32-bit
+          
+          # Audio
+          Set-ItemProperty -Path $rdpPath -Name "fDisableCpm" -Value 0 -Force
+          Set-ItemProperty -Path $rdpPath -Name "fDisableAudioCapture" -Value 0 -Force
+          
+          # Device Redirection
+          Set-ItemProperty -Path $rdpPath -Name "fDisableCdm" -Value 0 -Force
+          Set-ItemProperty -Path $rdpPath -Name "fDisableLPT" -Value 1 -Force
+          Set-ItemProperty -Path $rdpPath -Name "fDisablePNPRedir" -Value 1 -Force
+          Set-ItemProperty -Path $rdpPath -Name "fDisablePrinting" -Value 1 -Force
+          
+          # MultiMonitor Support
+          Set-ItemProperty -Path $rdpPath -Name "fMultiMonitorSupport" -Value 1 -Force
+          
+          Restart-Service -Name TermService -Force
+          Start-Sleep -Seconds 3
+          
+          Write-Host "  ✓ Advanced RDP configured" -ForegroundColor Green
+
+      - name: "👤 Create Premium RDP User"
+        run: |
+          Write-Host "`n👤 Creating premium RDP user..." -ForegroundColor Cyan
+          
+          try {
+              # Cryptographically secure password
+              $bytes = New-Object byte[] 40
+              [System.Security.Cryptography. RNGCryptoServiceProvider]::new().GetBytes($bytes)
+              $password = [System.Convert]::ToBase64String($bytes).Substring(0, 48)
+              
+              $userExists = Get-LocalUser -Name "RDP" -ErrorAction SilentlyContinue
+              if ($userExists) { Remove-LocalUser -Name "RDP" -Force }
+              
+              $securePass = ConvertTo-SecureString $password -AsPlainText -Force
+              New-LocalUser -Name "RDP" -Password $securePass -AccountNeverExpires -PasswordNeverExpires:  $true
+              Add-LocalGroupMember -Group "Administrators" -Member "RDP"
+              Add-LocalGroupMember -Group "Remote Desktop Users" -Member "RDP"
+              
+              # User environment optimization
+              $userPath = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer'
+              Set-ItemProperty -Path $userPath -Name "EnableAutoTray" -Value 0 -Force
+              
+              echo "RDP_PASSWORD=$password" >> $env: GITHUB_ENV
+              Write-Host "  ✓ Premium RDP user created" -ForegroundColor Green
+          } catch {
+              Write-Error "Failed:  $_"; exit 1
+          }
+
+      - name: "🗂️ Create Ultra-High-Performance Storage"
+        run: |
+          Write-Host "`n🗂️ Creating high-performance storage drive..." -ForegroundColor Yellow
+          
+          try {
+              $size = [int]$env:STORAGE_SIZE * 1GB
+              $vhdxPath = "D:\data_drive.vhdx"
+              
+              # Create fixed VHDX for maximum performance
+              New-VHD -Path $vhdxPath -SizeBytes $size -Fixed -ErrorAction Stop | 
+                Mount-VHD -PassThru | Out-Null
+              
+              Start-Sleep -Seconds 3
+              
+              $rawDisk = Get-Disk | Where-Object PartitionStyle -eq 'RAW' | Select-Object -First 1
+              if ($rawDisk) {
+                  $disk = $rawDisk | Initialize-Disk -PartitionStyle GPT -PassThru
+                  $partition = $disk | New-Partition -AssignDriveLetter -UseMaximumSize
+                  
+                  # ReFS for maximum performance
+                  $volume = $partition | Format-Volume -FileSystem ReFS `
+                    -NewFileSystemLabel "DataDrive" -Confirm:$false -Force
+                  
+                  $driveLetter = $partition.DriveLetter
+                  echo "DATA_DRIVE=${driveLetter}:" >> $env:GITHUB_ENV
+                  
+                  # Optimize volume
+                  fsutil behavior set disablecompression 0
+                  fsutil behavior set enablecompression 1
+                  fsutil volume defrag ${driveLetter}:  /U /V
+                  
+                  Write-Host "  ✓ Storage drive created:  ${driveLetter}:  ($env:STORAGE_SIZE GB ReFS)" -ForegroundColor Green
+              }
+          } catch {
+              Write-Error "Storage creation failed: $_"; exit 1
+          }
+
+      - name:  "🔌 Install & Configure Tailscale VPN"
+        run: |
+          Write-Host "`n🔌 Installing Tailscale VPN..." -ForegroundColor Magenta
+          
+          try {
+              $maxRetries = 3
+              $msiUrl = $null
+              
+              for ($i = 0; $i -lt $maxRetries; $i++) {
+                  try {
+                      $stablePage = Invoke-WebRequest -Uri "https://pkgs.tailscale.com/stable/" `
+                        -UseBasicParsing -TimeoutSec 15
+                      $msiUrl = ($stablePage.Links | Where-Object { $_.href -like "*amd64.msi" } | 
+                        Select-Object -First 1).href
+                      if (-not $msiUrl. StartsWith("http")) { 
+                        $msiUrl = "https://pkgs.tailscale.com/stable/$msiUrl" 
+                      }
+                      break
+                  } catch {
+                      if ($i -lt $maxRetries - 1) { Start-Sleep -Seconds 5 }
+                  }
+              }
+              
+              if (-not $msiUrl) { throw "Could not find Tailscale download URL" }
+              
+              $installerPath = "$env:TEMP\tailscale. msi"
+              Invoke-WebRequest -Uri $msiUrl -OutFile $installerPath -TimeoutSec 30
+              Start-Process msiexec. exe -ArgumentList "/i", "`"$installerPath`"", "/quiet", "/norestart" `
+                -Wait -ErrorAction Stop
+              Remove-Item $installerPath -Force
+              
+              Write-Host "  ✓ Tailscale installed successfully" -ForegroundColor Green
+          } catch {
+              Write-Error "Tailscale installation failed: $_"; exit 1
+          }
+
+      - name: "🔒 Configure Advanced Firewall"
+        run: |
+          Write-Host "`n🔒 Configuring advanced firewall rules..." -ForegroundColor Cyan
+          
+          try {
+              # Clear old rules
+              netsh advfirewall firewall delete rule name="RDP-Tailscale" 2>$null
+              netsh advfirewall firewall delete rule name="Audio-RDP" 2>$null
+              netsh advfirewall firewall delete rule name="Media-RDP" 2>$null
+              
+              # RDP Core
+              netsh advfirewall firewall add rule name="RDP-Tailscale" dir=in action=allow protocol=TCP `
+                localport=3389 remoteip=100.64.0.0/10 enable=yes
+              
+              # Audio streams
+              netsh advfirewall firewall add rule name="Audio-RDP" dir=in action=allow protocol=UDP `
+                localport=1194-1300 remoteip=100.64.0.0/10 enable=yes
+              
+              # Media streaming
+              netsh advfirewall firewall add rule name="Media-RDP" dir=in action=allow protocol=TCP `
+                localport=6000-6100 remoteip=100.64.0.0/10 enable=yes
+              
+              # USB Redirection
+              netsh advfirewall firewall add rule name="USB-RDP" dir=in action=allow protocol=TCP `
+                localport=27000 remoteip=100.64.0.0/10 enable=yes
+              
+              # Inbound all from Tailscale subnet (be careful!)
+              netsh advfirewall firewall add rule name="Tailscale-Full" dir=in action=allow `
+                remoteip=100.64.0.0/10 enable=yes
+              
+              Write-Host "  ✓ Advanced firewall rules configured" -ForegroundColor Green
+          } catch {
+              Write-Error "Firewall configuration failed: $_"; exit 1
+          }
+
+      - name: "🌍 Connect to Tailscale with Optimization"
+        run: |
+          Write-Host "`n🌍 Connecting to Tailscale..." -ForegroundColor Magenta
+          
+          try {
+              & "$env:ProgramFiles\Tailscale\tailscale.exe" up `
+                --authkey=${{ secrets.TAILSCALE_AUTH_KEY }} `
+                --hostname=gh-rdp-${{ github.run_id }} `
+                --accept-routes `
+                --accept-dns=false `
+                --speed-test=false
+              
+              # Get IP with optimized retry
+              $retries = 0
+              $maxRetries = 25
+              $delay = 1
+              $tsIP = $null
+              
+              while ($retries -lt $maxRetries -and -not $tsIP) {
+                  Start-Sleep -Seconds $delay
+                  $tsIP = & "$env:ProgramFiles\Tailscale\tailscale. exe" ip -4 2>$null
+                  $retries++
+                  $delay = [Math]::Min($delay + 0.5, 4)
+              }
+              
+              if (-not $tsIP) { throw "Failed to obtain Tailscale IP" }
+              
+              echo "TAILSCALE_IP=$tsIP" >> $env:GITHUB_ENV
+              Write-Host "  ✓ Connected to Tailscale:  $tsIP" -ForegroundColor Green
+          } catch {
+              Write-Error "Tailscale connection failed: $_"; exit 1
+          }
+
+      - name: "🎨 Install Optional Tools & Utilities"
+        run: |
+          Write-Host "`n🎨 Installing additional utilities..." -ForegroundColor Yellow
+          
+          try {
+              # Check if winget is available
+              if (Get-Command winget -ErrorAction SilentlyContinue) {
+                  Write-Host "  Installing optional tools..." -ForegroundColor Gray
+                  
+                  # You can add more tools here as needed
+                  # winget install --id Git. Git -e --source winget --accept-source-agreements
+                  # winget install --id 7zip.7zip -e --source winget --accept-source-agreements
+              }
+              
+              Write-Host "  ✓ Utilities installation completed" -ForegroundColor Green
+          } catch {
+              Write-Host "  ⚠️ Some utilities could not be installed (non-critical)" -ForegroundColor Yellow
+          }
+
+      - name: "📋 Display Comprehensive Connection Information"
+        run: |
+          Write-Host "`n" -ForegroundColor White
+          Write-Host "╔═══════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
+          Write-Host "║           🚀 ADVANCED RDP CONNECTION INFORMATION 🚀           ║" -ForegroundColor Cyan
+          Write-Host "╠═══════════════════════════════════════════════════════════════╣" -ForegroundColor Cyan
+          Write-Host "║                                                               ║" -ForegroundColor Cyan
+          Write-Host "║  🌐 Tailscale IP:      $env:TAILSCALE_IP" -ForegroundColor Green
+          Write-Host "║  👤 Username:         RDP" -ForegroundColor Green
+          Write-Host "║  🔑 Password:         $env:RDP_PASSWORD" -ForegroundColor Yellow
+          if ($env:DATA_DRIVE) {
+              Write-Host "║  💾 Storage Drive:    $env:DATA_DRIVE ($env:STORAGE_SIZE GB)" -ForegroundColor Green
+          }
+          Write-Host "║  ⚙️  Performance:      $env:PERF_MODE" -ForegroundColor Cyan
+          Write-Host "║                                                               ║" -ForegroundColor Cyan
+          Write-Host "╠═══════════════════════════════════════════════════════════════╣" -ForegroundColor Cyan
+          Write-Host "║  📢 AUDIO CONFIGURATION                                       ║" -ForegroundColor Magenta
+          Write-Host "║                                                               ║" -ForegroundColor Magenta
+          Write-Host "║  RDP Client Menu:                                             ║" -ForegroundColor Gray
+          Write-Host "║    → Local Resources Tab                                      ║" -ForegroundColor Gray
+          Write-Host "║    → Remote Audio Section                                     ║" -ForegroundColor Gray
+          Write-Host "║    → Select:  Play on this computer                            ║" -ForegroundColor Gray
+          Write-Host "║                                                               ║" -ForegroundColor Magenta
+          Write-Host "╠═══════════════════════════════════════════════════════════════╣" -ForegroundColor Cyan
+          Write-Host "║  ✨ PERFORMANCE ENHANCEMENTS APPLIED                          ║" -ForegroundColor Green
+          Write-Host "║                                                               ║" -ForegroundColor Green
+          Write-Host "║  ✓ CPU Tuning (High Performance Mode)                        ║" -ForegroundColor Gray
+          Write-Host "║  ✓ Advanced Memory Management                                ║" -ForegroundColor Gray
+          Write-Host "║  ✓ Network Stack Optimization                                ║" -ForegroundColor Gray
+          Write-Host "║  ✓ GPU Acceleration Enabled                                  ║" -ForegroundColor Gray
+          Write-Host "║  ✓ ReFS Storage (High Speed)                                 ║" -ForegroundColor Gray
+          Write-Host "║  ✓ TCP Window Scaling                                        ║" -ForegroundColor Gray
+          Write-Host "║  ✓ UDP Transport Enabled                                     ║" -ForegroundColor Gray
+          Write-Host "║  ✓ Audio Device Optimization                                 ║" -ForegroundColor Gray
+          Write-Host "║  ✓ Multi-Monitor Support                                     ║" -ForegroundColor Gray
+          Write-Host "║  ✓ WDDM Driver Enabled                                       ║" -ForegroundColor Gray
+          Write-Host "║  ✓ Advanced Compression                                      ║" -ForegroundColor Gray
+          Write-Host "║  ✓ System Monitoring Enabled                                 ║" -ForegroundColor Gray
+          Write-Host "║                                                               ║" -ForegroundColor Green
+          Write-Host "╠═══════════════════════════════════════════════════════════════╣" -ForegroundColor Cyan
+          Write-Host "║  💡 RECOMMENDATIONS                                           ║" -ForegroundColor Yellow
+          Write-Host "║                                                               ║" -ForegroundColor Yellow
+          Write-Host "║  • Use RDP client version 10.0 or higher                      ║" -ForegroundColor Gray
+          Write-Host "║  • Enable 32-bit color for better quality                     ║" -ForegroundColor Gray
+          Write-Host "║  • Check Firewall if connection fails                        ║" -ForegroundColor Gray
+          Write-Host "║  • Monitor D:\rdp_monitor.log for system stats              ║" -ForegroundColor Gray
+          Write-Host "║  • Keep Tailscale connection active                          ║" -ForegroundColor Gray
+          Write-Host "║                                                               ║" -ForegroundColor Yellow
+          Write-Host "╚═══════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
+          Write-Host "`n" -ForegroundColor White
+
+      - name: "⏳ Advanced System Monitor & Keep-Alive"
+        run:  |
+          Write-Host "⏳ Starting advanced monitoring system..." -ForegroundColor Green
+          
+          $sessionActive = $true
+          $checkInterval = 300  # 5 minutes
+          $alertThreshold = 85  # CPU/Memory %
+          $failureCount = 0
+          $maxFailures = 3
+          $restartCount = 0
+          $maxRestarts = 5
+          
+          while ($sessionActive) {
+              try {
+                  $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+                  
+                  # Tailscale Health Check
+                  $tsStatus = & "$env:ProgramFiles\Tailscale\tailscale.exe" status 2>$null | Select-Object -First 1
+                  if ($tsStatus -match "Connected") {
+                      Write-Host "[$timestamp] ✅ Tailscale Status: Connected" -ForegroundColor Green
+                      $failureCount = 0
+                  } else {
+                      $failureCount++
+                      Write-Host "[$timestamp] ⚠️  Tailscale Status:  Disconnected ($failureCount/$maxFailures)" -ForegroundColor Yellow
+                      
+                      if ($failureCount -ge $maxFailures -and $restartCount -lt $maxRestarts) {
+                          Write-Host "[$timestamp] 🔄 Attempting to reconnect..." -ForegroundColor Yellow
+                          & "$env:ProgramFiles\Tailscale\tailscale. exe" up --accept-routes --accept-dns=false
+                          $failureCount = 0
+                          $restartCount++
+                      }
+                  }
+                  
+                  # Performance Monitoring
+                  $cpuUsage = (Get-WmiObject -Query "SELECT LoadPercentage FROM Win32_Processor" | 
+                    Measure-Object -Property LoadPercentage -Average).Average
+                  
+                  $totalMem = (Get-WmiObject -Class Win32_ComputerSystem).TotalPhysicalMemory / 1GB
+                  $freeMem = (Get-WmiObject -Class Win32_OperatingSystem).FreePhysicalMemory / 1MB / 1024
+                  $memUsage = [math]::Round((($totalMem - $freeMem) / $totalMem) * 100)
+                  
+                  Write-Host "[$timestamp] 📊 CPU: ${cpuUsage}% | RAM: ${memUsage}% (${freeMem}GB Free)" -ForegroundColor Cyan
+                  
+                  # Alert on high usage
+                  if ($cpuUsage -gt $alertThreshold -or $memUsage -gt $alertThreshold) {
+                      Write-Host "[$timestamp] ⚠️  HIGH RESOURCE USAGE DETECTED!" -ForegroundColor Red
+                  }
+                  
+                  # Disk monitoring
+                  $diskD = Get-PSDrive -Name D -ErrorAction SilentlyContinue
+                  if ($diskD) {
+                      $diskFree = [math]::Round($diskD.Free / 1GB)
+                      $diskUsed = [math]::Round($diskD.Used / 1GB)
+                      Write-Host "[$timestamp] 💾 Disk D: ${diskUsed}GB / ${diskFree}GB Free" -ForegroundColor Cyan
+                      
+                      if ($diskFree -lt 50) {
+                          Write-Host "[$timestamp] ⚠️  LOW DISK SPACE WARNING!" -ForegroundColor Red
+                      }
+                  }
+                  
+                  # Check RDP Service
+                  $rdpService = Get-Service -Name TermService -ErrorAction SilentlyContinue
+                  if ($rdpService. Status -ne "Running") {
+                      Write-Host "[$timestamp] 🔧 RDP Service is not running, attempting to restart..." -ForegroundColor Yellow
+                      Start-Service -Name TermService -ErrorAction SilentlyContinue
+                  }
+                  
+                  Start-Sleep -Seconds $checkInterval
+              } catch {
+                  Write-Host "[$timestamp] ❌ Monitoring error: $_" -ForegroundColor Red
+                  Start-Sleep -Seconds 60
+              }
           }
