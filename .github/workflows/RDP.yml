@@ -93,26 +93,7 @@ jobs:
           
           Write-Host "  ✓ CPU tuned for maximum performance" -ForegroundColor Green
 
-      - name: "💾 Advanced Memory Management"
-        run: |
-          Write-Host "`n💾 Memory Optimization..." -ForegroundColor Yellow
-          
-          $memPath = 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management'
-          
-          # Increase cache size
-          Set-ItemProperty -Path $memPath -Name "LargeSystemCache" -Value 1 -Force
-          
-          # Optimize paging
-          Set-ItemProperty -Path $memPath -Name "PageFileExtensionSize" -Value 1024000 -Force
-          
-          # Memory management optimization
-          Set-ItemProperty -Path $memPath -Name "IoPageLockLimit" -Value 16000000 -Force
-          
-          # Prefetch optimization
-          Set-ItemProperty -Path "$memPath\PrefetchParameters" -Name "EnablePrefetcher" -Value 3 -Force
-          Set-ItemProperty -Path "$memPath\PrefetchParameters" -Name "EnableSuperfetch" -Value 3 -Force
-          
-          Write-Host "  ✓ Memory management optimized" -ForegroundColor Green
+
 
       - name: "🌐 Advanced Network Stack Tuning"
         run: |
