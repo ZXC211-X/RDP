@@ -23,7 +23,7 @@ jobs:
     timeout-minutes: 360
 
     steps:
-      - name: "🎯 System Info & Pre-checks"
+      - name: "System Info Pre-checks"
         run: |
           Write-Host "════════════════════════════════════════" -ForegroundColor Magenta
           Write-Host "Advanced RDP System Initialization" -ForegroundColor Green
@@ -44,9 +44,9 @@ jobs:
           echo "PERF_MODE=${{ github.event.inputs.performance_mode }}" >> $env: GITHUB_ENV
           echo "STORAGE_SIZE=${{ github.event.inputs.storage_size }}" >> $env:GITHUB_ENV
 
-      - name: "🔧 Advanced Service Management"
+      - name: "Advanced Service Management"
         run: |
-          Write-Host "`n🔧 Configuring System Services..." -ForegroundColor Cyan
+          Write-Host "`n Configuring System Services..." -ForegroundColor Cyan
           
           # Services to disable
           $disableServices = @(
@@ -65,9 +65,9 @@ jobs:
           
           Write-Host "  ✓ Disabled $($disableServices.Count) unnecessary services" -ForegroundColor Green
 
-      - name: "⚡ Ultimate CPU Tuning"
+      - name: "Ultimate CPU Tuning"
         run: |
-          Write-Host "`n⚡ CPU & Process Optimization..." -ForegroundColor Yellow
+          Write-Host "CPU & Process Optimization..." -ForegroundColor Yellow
           
           # Process Priority
           Set-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\PriorityControl' `
@@ -82,9 +82,9 @@ jobs:
           
           Write-Host "  ✓ CPU tuned for maximum performance" -ForegroundColor Green
 
-      - name: "💾 Advanced Memory Management"
+      - name: "Advanced Memory Management"
         run: |
-          Write-Host "`n💾 Memory Optimization..." -ForegroundColor Yellow
+          Write-Host "Memory Optimization..." -ForegroundColor Yellow
           
           $memPath = 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management'
           
@@ -101,9 +101,9 @@ jobs:
           
           Write-Host "  ✓ Memory management optimized" -ForegroundColor Green
 
-      - name: "🌐 ADVANCED NETWORK STACK TUNING - PART 1"
+      - name: "ADVANCED NETWORK STACK TUNING - PART 1"
         run: |
-          Write-Host "`n🌐 Network Stack Optimization (Part 1)..." -ForegroundColor Cyan
+          Write-Host "Network Stack Optimization (Part 1)..." -ForegroundColor Cyan
           
           $tcpPath = 'HKLM:\SYSTEM\CurrentControlSet\Services\TCPIP\Parameters'
           
